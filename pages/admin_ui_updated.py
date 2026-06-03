@@ -30,87 +30,231 @@ LOGO_PATH = BASE_DIR / "slotx_logo.jpeg"
 
 
 # ─────────────────────────────────────────────
+# Footer Overlay Dialogs (shared with user module)
+# ─────────────────────────────────────────────
+@st.experimental_dialog("🏠 Home", width="large")
+def _footer_home_dialog():
+    st.markdown("""
+    ### Welcome to SLotX Admin
+
+    **Smart Parking Management System - Administrator Dashboard**
+
+    This is your command center for managing the entire SLotX parking network.
+
+    #### Key Admin Features
+    - 📊 **Dashboard** - Real-time occupancy and analytics
+    - 🅿️ **Slot Management** - Add, edit, and manage parking slots
+    - 📁 **Media Control** - Monitor parking area media feeds
+    - 📋 **Booking Admin** - Manage and track all bookings
+    - 💰 **Rate Settings** - Configure parking rates
+    - 📈 **Advanced Analytics** - Detailed reporting and insights
+    - 🚗 **Entry/Exit Logs** - Track vehicle movements
+    - ⚠️ **Overstay Alerts** - Monitor and resolve overstays
+
+    Use this dashboard to optimize your parking operations.
+    """)
+
+
+@st.experimental_dialog("ℹ️ About Admin", width="large")
+def _footer_about_dialog():
+    st.markdown("""
+    ### About SLotX Admin Console
+
+    The SLotX Admin Dashboard is designed for parking facility managers and administrators.
+
+    #### Admin Capabilities
+    - **Full Control** - Manage all aspects of your parking facility
+    - **Real-Time Data** - Live occupancy, revenue, and booking information
+    - **Advanced Tools** - Overstay management, media monitoring, analytics
+    - **User Management** - Monitor user activity and bookings
+    - **Revenue Insights** - Track income and occupancy trends
+    - **System Monitoring** - Entry/exit logs and security features
+
+    #### For Support
+    Contact the SLotX support team for admin-specific assistance.
+    """)
+
+
+def _render_footer():
+    """Render the admin footer section."""
+    st.markdown("---")
+    st.markdown("""
+    <div style='padding: 20px 0; color: #9aa0b4; font-size: 13px;'>
+    """, unsafe_allow_html=True)
+
+    # Footer Navigation
+    footer_cols = st.columns([1, 1, 1, 1, 1])
+
+    with footer_cols[0]:
+        if st.button("🏠 Home", use_container_width=True):
+            _footer_home_dialog()
+
+    with footer_cols[1]:
+        if st.button("ℹ️ About", use_container_width=True):
+            _footer_about_dialog()
+
+    with footer_cols[2]:
+        st.markdown("<div style='opacity:0;cursor:default;'><button style='width:100%;'>Placeholder</button></div>", unsafe_allow_html=True)
+
+    with footer_cols[3]:
+        st.markdown("<div style='opacity:0;cursor:default;'><button style='width:100%;'>Placeholder</button></div>", unsafe_allow_html=True)
+
+    with footer_cols[4]:
+        st.markdown("<div style='opacity:0;cursor:default;'><button style='width:100%;'>Placeholder</button></div>", unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; padding-top: 10px; color: #6b7280; font-size: 11px;'>© 2026 SLotX — Smart Parking Solutions. All rights reserved.</div>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
 def render_admin():
     st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
 
-    # ── Sidebar ───────────────────────────────
-    with st.sidebar:
-        if LOGO_PATH.exists():
-            st.image(str(LOGO_PATH), width=95)
-        # SLotX Logo & Branding
-        st.markdown("""
-        <div style='display:flex;align-items:center;gap:10px;padding:6px 0 16px'>
-          <div style='width:36px;height:36px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:8px;
-                      display:flex;align-items:center;justify-content:center;
-                      font-family:Syne,sans-serif;font-weight:800;font-size:18px;color:#fff'>S</div>
-          <div>
-            <div style='font-family:Syne,sans-serif;font-size:15px;font-weight:700'>SLotX</div>
-            <div style='font-size:11px;color:#9aa0b4'>Admin Console</div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+    BASE_DIR = Path(__file__).resolve().parents[1]
+    LOGO_PATH = BASE_DIR / "slotx_logo.jpeg"
 
+    # Hide sidebar and expand content to full width (admin console only)
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarNav"],
+    .sidebar { display: none !important; width: 0 !important; }
+    [data-testid="stMainBlockContainer"],
+    .main { width: 100% !important; max-width: 100% !important; }
+    .stAppViewContainer { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
+    [data-testid="stContainer"] { width: 100% !important; }
+    .element-container { width: 100% !important; }
+
+    /* Left Panel Styling */
+    .left-panel {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100px;
+        height: 100vh;
+        background: linear-gradient(180deg, #0b0c0f 0%, #111318 50%, #0b0c0f 100%);
+        border-right: 1px solid #2a2f3d;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 20px 0;
+        gap: 30px;
+        z-index: 999;
+    }
+    .left-panel-logo {
+        width: 75px;
+        height: 75px;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(79, 124, 255, 0.3);
+        flex-shrink: 0;
+    }
+    .left-panel-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Left panel with logo and dark mode toggle (fixed position)
+    dark_mode = st.session_state.dark
+    dark_label = f"{'🌙' if dark_mode else '☀️'}"
+
+    st.markdown(f"""
+    <div class="left-panel">
+        <div class="left-panel-logo">
+            <img src="file:///{LOGO_PATH}" alt="SLotX" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px;">
+        </div>
+        <button id="dark-mode-btn" style="position: fixed; left: 20px; top: 130px; width: 60px; height: 60px; background: linear-gradient(135deg, #4f7cff, #22c55e); border-radius: 50%; border: none; cursor: pointer; font-size: 24px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); z-index: 999; transition: transform 0.2s ease;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+            {dark_label}
+        </button>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Display logo using Streamlit (for actual rendering)
+    if LOGO_PATH.exists():
         st.markdown(f"""
-        <div style='background:#181b22;border-radius:8px;padding:12px;margin-bottom:1rem;border:1px solid #2a2f3d'>
-          <div style='font-size:11px;color:#9aa0b4;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px'>Logged In As</div>
-          <div style='font-size:13px;font-weight:600;color:#e8eaf0'>{st.session_state.user["name"]}</div>
-          <div style='font-size:11px;color:#4f7cff'>👑 Administrator</div>
-        </div>
+        <div style="position: absolute; top: -9999px; left: -9999px; width: 75px; height: 75px;">
         """, unsafe_allow_html=True)
+        st.image(str(LOGO_PATH), width=75)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        page = st.radio(
-            "Navigation",
-            ["📊 Dashboard", "🅿️ Slots", "📁 Media", "📋 Bookings", "💰 Rates",
-             "📈 Analytics", "🚗 Entry/Exit", "⚠️ Overstay", "⏳ Waitlist"],
-            label_visibility="collapsed",
-        )
+    # Dark mode toggle button (invisible, positioned off-screen)
+    st.markdown('<div style="position: absolute; top: -9999px; left: -9999px;">', unsafe_allow_html=True)
+    if st.button(dark_label, key="left_dark_toggle_admin"):
+        st.session_state.dark = not st.session_state.dark
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        st.divider()
+    # ── Top Bar: Navigation Buttons + Sign Out ────
+    top_bar_cols = st.columns([5.8, 0.7])
 
-        # Live occupancy bar
-        slots = get_all_slots()
-        vac   = sum(1 for s in slots if s["status"] == "vacant")
-        occ   = len(slots) - vac
-        pct   = int(occ / len(slots) * 100) if slots else 0
-        st.markdown(f"""
-        <div style='font-size:12px;color:#9aa0b4;margin-bottom:4px;display:flex;justify-content:space-between'>
-          <span>Occupancy</span><span style='font-weight:700'>{pct}%</span>
-        </div>
-        <div style='height:6px;background:#1e222c;border-radius:3px;overflow:hidden'>
-          <div style='height:6px;background:linear-gradient(90deg,#4f7cff,#22c55e);width:{pct}%;border-radius:3px'></div>
-        </div>
-        <div style='display:flex;justify-content:space-between;font-size:11px;margin-top:6px'>
-          <span style='color:#22c55e'>🟢 {vac} free</span>
-          <span style='color:#ef4444'>🔴 {occ} occupied</span>
-        </div>
-        """, unsafe_allow_html=True)
+    # Left: Navigation buttons (split into two rows due to space)
+    with top_bar_cols[0]:
+        nav_row1 = st.columns(5, gap="small")
+        nav_row2 = st.columns(4, gap="small")
 
-        st.divider()
-        
-        col_theme, col_logout = st.columns(2)
-        
-        with col_theme:
-            dark = st.toggle("Dark mode", value=st.session_state.dark)
-            if dark != st.session_state.dark:
-                st.session_state.dark = dark
-                st.rerun()
+        nav_items_1 = [
+            ("📊 Dashboard", "dashboard"),
+            ("🅿️ Slots", "slots"),
+            ("📁 Media", "media"),
+            ("📋 Bookings", "bookings"),
+            ("💰 Rates", "rates"),
+        ]
 
-        with col_logout:
-            if st.button("Sign Out", use_container_width=True):
-                for k in ["logged_in", "user", "role"]:
-                    st.session_state[k] = None if k != "logged_in" else False
-                st.rerun()
+        nav_items_2 = [
+            ("📈 Analytics", "analytics"),
+            ("🚗 Entry/Exit", "entry_exit"),
+            ("⚠️ Overstay", "overstay"),
+            ("⏳ Waitlist", "waitlist"),
+        ]
+
+        # Initialize current page in session state
+        if "admin_current_page" not in st.session_state:
+            st.session_state.admin_current_page = "dashboard"
+
+        # First row of nav buttons
+        for col, (label, page_key) in zip(nav_row1, nav_items_1):
+            with col:
+                if st.button(label, use_container_width=True, key=f"nav_{page_key}"):
+                    st.session_state.admin_current_page = page_key
+                    st.rerun()
+
+        # Second row of nav buttons
+        for col, (label, page_key) in zip(nav_row2, nav_items_2):
+            with col:
+                if st.button(label, use_container_width=True, key=f"nav_{page_key}"):
+                    st.session_state.admin_current_page = page_key
+                    st.rerun()
+
+        # Determine which page to show
+        page = st.session_state.admin_current_page
+
+    # Right: Sign Out Button
+    with top_bar_cols[1]:
+        if st.button("➡️ Sign Out", use_container_width=True, key="logout_admin"):
+            for k in ["logged_in", "user", "role"]:
+                st.session_state[k] = None if k != "logged_in" else False
+            st.rerun()
+
+
+    st.divider()
 
     # ── Page routing ─────────────────────────
-    if   page.startswith("📊"): _dashboard()
-    elif page.startswith("🅿️"): _slots_page()
-    elif page.startswith("📁"): _uploads_page()
-    elif page.startswith("📋"): _bookings_page()
-    elif page.startswith("💰"): _rates_page()
-    elif page.startswith("📈"): _analytics_page()
-    elif page.startswith("🚗"): _entry_exit_page()
-    elif page.startswith("⚠️"): _overstay_page()
-    elif page.startswith("⏳"): _waitlist_page()
+    if   page == "dashboard": _dashboard()
+    elif page == "slots": _slots_page()
+    elif page == "media": _uploads_page()
+    elif page == "bookings": _bookings_page()
+    elif page == "rates": _rates_page()
+    elif page == "analytics": _analytics_page()
+    elif page == "entry_exit": _entry_exit_page()
+    elif page == "overstay": _overstay_page()
+    elif page == "waitlist": _waitlist_page()
+
+    # ── Footer (shown on all pages) ──────────
+    _render_footer()
 
 
 # ─────────────────────────────────────────────

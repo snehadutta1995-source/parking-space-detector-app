@@ -1,77 +1,122 @@
 """
-SLotX — Payment Gateway
-Handle payments via Credit/Debit Cards, UPI, and other methods
+SLotX — Payment Gateway (Mock)
+Card-only payment system. Payments are accepted ONLY for cards present in:
+    payments/valid-credit-card.csv   (Credit cards)
+    payments/valid-debit-card.csv    (Debit cards)
+CSV format (pipe delimited):  cardNumber|cvv|expiry|cardHolderName|otp
 """
 
+import csv
 import streamlit as st
-import pandas as pd
 from datetime import datetime
 import time
-import re
+from pathlib import Path
 
 from utils.database import (
-    get_booking_by_ref, activate_booking, get_payment_by_booking_ref,
+    get_booking_by_ref, activate_booking,
     create_payment, update_payment_status, send_notification, get_user
 )
 from utils.styles import apply_theme
 
-
-def validate_credit_card(card_number):
-    """Validate credit card using Luhn algorithm."""
-    card_number = card_number.replace(" ", "").replace("-", "")
-    if not card_number.isdigit() or len(card_number) < 13 or len(card_number) > 19:
-        return False
-    
-    # Luhn algorithm
-    digits = [int(d) for d in card_number]
-    checksum = 0
-    for i, digit in enumerate(reversed(digits)):
-        if i % 2 == 1:
-            digit *= 2
-            if digit > 9:
-                digit -= 9
-        checksum += digit
-    return checksum % 10 == 0
+BASE_DIR = Path(__file__).resolve().parent
+CREDIT_CARD_CSV = BASE_DIR / "payments" / "valid-credit-card.csv"
+DEBIT_CARD_CSV = BASE_DIR / "payments" / "valid-debit-card.csv"
 
 
-def validate_cvv(cvv):
-    """Validate CVV (3-4 digits)."""
-    return bool(re.match(r'^\d{3,4}$', cvv))
+# ─────────────────────────────────────────────
+# Mock card store
+# ─────────────────────────────────────────────
+def _load_valid_cards(csv_path: Path):
+    """Load valid cards from a pipe-delimited CSV into a dict keyed by card number."""
+    cards = {}
+    if not csv_path.exists():
+        return cards
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f, delimiter="|")
+        for row in reader:
+            number = (row.get("cardNumber") or "").strip()
+            if not number:
+                continue
+            cards[number] = {
+                "cvv": (row.get("cvv") or "").strip(),
+                "expiry": (row.get("expiry") or "").strip(),
+                "cardHolderName": (row.get("cardHolderName") or "").strip(),
+                "otp": (row.get("otp") or "").strip(),
+            }
+    return cards
 
 
-def validate_upi(upi_id):
-    """Validate UPI ID format."""
-    return bool(re.match(r'^[a-zA-Z0-9._-]+@[a-zA-Z]+$', upi_id))
+def _normalize_number(card_number: str) -> str:
+    return (card_number or "").replace(" ", "").replace("-", "").strip()
 
 
-def render_payment():
-    """Main payment gateway page."""
+def verify_card_details(card_type, cardholder, card_number, expiry, cvv):
+    """
+    Validate the entered card against the mock store.
+    Returns (ok, message, expected_otp).
+    """
+    csv_path = CREDIT_CARD_CSV if card_type == "Credit Card" else DEBIT_CARD_CSV
+    cards = _load_valid_cards(csv_path)
+    number = _normalize_number(card_number)
+
+    if not number:
+        return False, "Please enter a card number.", None
+
+    record = cards.get(number)
+    if record is None:
+        return False, "Card not recognized. This card is not authorized for payments.", None
+
+    if cvv.strip() != record["cvv"]:
+        return False, "Invalid CVV for this card.", None
+
+    if expiry.strip() != record["expiry"]:
+        return False, "Invalid expiry date for this card.", None
+
+    if cardholder.strip().lower() != record["cardHolderName"].lower():
+        return False, "Cardholder name does not match our records.", None
+
+    return True, "Card verified. An OTP has been sent to your registered mobile number.", record["otp"]
+
+
+# ─────────────────────────────────────────────
+# Page
+# ─────────────────────────────────────────────
+def render_payment(booking_ref: str = None):
+    """Main payment gateway page. booking_ref falls back to session state."""
     st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
-    
-    # Get booking reference from query params
-    booking_ref = st.query_params.get("booking_ref", None)
-    
+
+    if booking_ref is None:
+        booking_ref = st.session_state.get("pay_booking_ref")
+
+    def _go_back(to_my_bookings: bool = False):
+        st.session_state.pop("pay_booking_ref", None)
+        st.session_state.pop("pay_otp_stage", None)
+        st.session_state.pop("pay_expected_otp", None)
+        st.session_state.pop("pay_card_meta", None)
+        if to_my_bookings:
+            st.session_state["user_current_page"] = "bookings"
+
     if not booking_ref:
         st.error("❌ No booking reference found. Please start a new booking.")
         if st.button("← Go Back to Bookings"):
-            st.switch_page("pages/user_ui_updated.py")
+            _go_back()
+            st.rerun()
         return
-    
-    # Get booking details
+
     booking = get_booking_by_ref(booking_ref)
-    
     if not booking:
         st.error(f"❌ Booking '{booking_ref}' not found.")
         if st.button("← Go Back to Bookings"):
-            st.switch_page("pages/user_ui_updated.py")
+            _go_back()
+            st.rerun()
         return
-    
+
     if booking["status"] == "active":
-        st.warning(f"⚠️ This booking is already paid and active!")
-        if st.button("← Go Back to My Bookings"):
-            st.switch_page("pages/user_ui_updated.py")
+        # Payment already completed — route straight to My Bookings.
+        _go_back(to_my_bookings=True)
+        st.rerun()
         return
-    
+
     # Header
     st.markdown("""
     <div style='display:flex;align-items:center;gap:12px;margin-bottom:1.5rem'>
@@ -83,10 +128,13 @@ def render_payment():
       </div>
     </div>
     """, unsafe_allow_html=True)
-    
+
+    if st.button("← Back to Bookings"):
+        _go_back()
+        st.rerun()
+
     col1, col2 = st.columns([2, 1])
-    
-    # Left column: Payment form
+
     with col1:
         st.markdown("### Booking Summary")
         summary_cols = st.columns(2)
@@ -96,28 +144,10 @@ def render_payment():
         with summary_cols[1]:
             st.metric("Date", booking["from_date"])
             st.metric("Duration", f"{booking['duration_hr']}h")
-        
+
         st.divider()
-        
-        # Payment method selection
-        st.markdown("### Select Payment Method")
-        payment_method = st.radio(
-            "Choose how you'd like to pay:",
-            ["💳 Credit/Debit Card", "📱 UPI", "💰 Other Methods"],
-            key="payment_method"
-        )
-        
-        st.divider()
-        
-        # Payment form based on method
-        if payment_method.startswith("💳"):
-            _render_card_payment(booking)
-        elif payment_method.startswith("📱"):
-            _render_upi_payment(booking)
-        else:
-            _render_other_payment(booking)
-    
-    # Right column: Order summary
+        _render_card_payment(booking)
+
     with col2:
         st.markdown("### Amount Due")
         st.markdown(f"""
@@ -136,163 +166,130 @@ def render_payment():
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
         st.info("🔒 Your payment is secure and encrypted.")
 
 
 def _render_card_payment(booking):
-    """Render credit/debit card payment form."""
-    st.markdown("#### Card Details")
-    
+    """Render credit/debit card payment form with OTP verification."""
+    st.markdown("### Pay with Card")
+
+    otp_stage = st.session_state.get("pay_otp_stage", False)
+
+    # ── Step 2: OTP verification ──────────────
+    if otp_stage:
+        meta = st.session_state.get("pay_card_meta", {})
+        st.success(f"✅ Card ending **{meta.get('last4', '----')}** verified.")
+        st.info("📲 Enter the 6-digit OTP sent to your registered mobile number.")
+        with st.form("otp_form"):
+            otp = st.text_input("OTP", placeholder="6-digit code", max_chars=6, type="password")
+            cols = st.columns(2)
+            with cols[0]:
+                verify = st.form_submit_button(
+                    f"🔒 Verify & Pay ₹{booking['amount']:.2f}", use_container_width=True
+                )
+            with cols[1]:
+                cancel = st.form_submit_button("↩ Use a different card", use_container_width=True)
+
+        if cancel:
+            st.session_state.pop("pay_otp_stage", None)
+            st.session_state.pop("pay_expected_otp", None)
+            st.session_state.pop("pay_card_meta", None)
+            st.rerun()
+
+        if verify:
+            expected = st.session_state.get("pay_expected_otp")
+            if not otp.strip():
+                st.error("❌ Please enter the OTP.")
+            elif otp.strip() != expected:
+                st.error("❌ Incorrect OTP. Please try again.")
+            else:
+                _process_card_payment(booking, meta.get("cardholder", ""),
+                                      meta.get("last4", ""), meta.get("card_type", "Card"))
+        return
+
+    # ── Step 1: card details ──────────────────
     with st.form("card_payment_form"):
-        cardholder = st.text_input("Cardholder Name", placeholder="John Doe")
-        card_number = st.text_input(
-            "Card Number",
-            placeholder="1234 5678 9012 3456",
-            max_chars=19
+        card_type = st.radio(
+            "Card Type", ["Credit Card", "Debit Card"], horizontal=True, key="pay_card_type"
         )
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            expiry = st.text_input("MM/YY", placeholder="12/25", max_chars=5)
-        with col2:
+        cardholder = st.text_input("Cardholder Name", placeholder="Name as on card")
+        card_number = st.text_input("Card Number", placeholder="1234 5678 9012 3456", max_chars=23)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            expiry = st.text_input("Expiry (MM/YY)", placeholder="12/27", max_chars=5)
+        with c2:
             cvv = st.text_input("CVV", placeholder="123", max_chars=4, type="password")
-        with col3:
-            st.write("")
-            st.write("")
-        
-        st.markdown("---")
-        
-        # Billing address
-        st.markdown("#### Billing Address")
-        col1, col2 = st.columns(2)
-        with col1:
-            city = st.text_input("City")
-        with col2:
-            pincode = st.text_input("Pincode")
-        
-        submit = st.form_submit_button("💳 Pay ₹" + f"{booking['amount']:.2f}", use_container_width=True)
-        
-        if submit:
-            # Validation
-            errors = []
-            if not cardholder:
-                errors.append("Cardholder name is required")
-            
-            card_num = card_number.replace(" ", "").replace("-", "")
-            if not validate_credit_card(card_num):
-                errors.append("Invalid card number")
-            
-            if not expiry or "/" not in expiry:
-                errors.append("Invalid expiry date format (use MM/YY)")
-            
-            if not validate_cvv(cvv):
-                errors.append("Invalid CVV (3-4 digits)")
-            
-            if not city:
-                errors.append("City is required")
-            
-            if not pincode or len(pincode) != 6:
-                errors.append("Valid 6-digit pincode required")
-            
-            if errors:
-                for error in errors:
-                    st.error(f"❌ {error}")
-            else:
-                _process_card_payment(booking, cardholder, card_num[-4:])
 
-
-def _render_upi_payment(booking):
-    """Render UPI payment form."""
-    st.markdown("#### UPI Payment")
-    st.info("📱 Enter your UPI ID to proceed with payment")
-    
-    with st.form("upi_payment_form"):
-        upi_id = st.text_input(
-            "UPI ID",
-            placeholder="yourname@bankname",
-            help="E.g., john@paytm or rahul@googlepay"
+        submit = st.form_submit_button(
+            f"Continue to Pay ₹{booking['amount']:.2f}", use_container_width=True
         )
-        
-        st.markdown("---")
-        st.markdown("**Popular UPI Apps:**")
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.button("📲 Google Pay", disabled=True, use_container_width=True)
-        with col2:
-            st.button("📲 PhonePe", disabled=True, use_container_width=True)
-        with col3:
-            st.button("📲 Paytm", disabled=True, use_container_width=True)
-        with col4:
-            st.button("📲 WhatsApp Pay", disabled=True, use_container_width=True)
-        
-        st.markdown("---")
-        
-        submit = st.form_submit_button("📱 Pay with UPI ₹" + f"{booking['amount']:.2f}", use_container_width=True)
-        
-        if submit:
-            if not upi_id or not validate_upi(upi_id):
-                st.error("❌ Please enter a valid UPI ID (e.g., yourname@bankname)")
-            else:
-                _process_upi_payment(booking, upi_id)
+
+    if submit:
+        if not cardholder.strip():
+            st.error("❌ Cardholder name is required.")
+            return
+        if not expiry.strip() or "/" not in expiry:
+            st.error("❌ Invalid expiry date format (use MM/YY).")
+            return
+        if not cvv.strip():
+            st.error("❌ CVV is required.")
+            return
+
+        ok, msg, expected_otp = verify_card_details(
+            card_type, cardholder, card_number, expiry, cvv
+        )
+        if not ok:
+            st.error(f"❌ {msg}")
+        else:
+            number = _normalize_number(card_number)
+            st.session_state["pay_otp_stage"] = True
+            st.session_state["pay_expected_otp"] = expected_otp
+            st.session_state["pay_card_meta"] = {
+                "cardholder": cardholder.strip(),
+                "last4": number[-4:],
+                "card_type": card_type,
+            }
+            st.rerun()
 
 
-def _render_other_payment(booking):
-    """Render other payment methods."""
-    st.markdown("#### Alternative Payment Methods")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("🏦 Net Banking", use_container_width=True):
-            st.info("Net Banking integration coming soon!")
-    with col2:
-        if st.button("📲 Wallet", use_container_width=True):
-            st.info("Digital Wallet integration coming soon!")
-    with col3:
-        if st.button("🎫 EMI", use_container_width=True):
-            st.info("EMI options coming soon!")
-
-
-def _process_card_payment(booking, cardholder, card_last4):
-    """Process card payment."""
+def _process_card_payment(booking, cardholder, card_last4, card_type):
+    """Process card payment after OTP verification."""
     with st.spinner("🔄 Processing payment..."):
-        time.sleep(2)  # Simulate payment processing
-        
+        time.sleep(1.5)
         try:
-            # Create payment record
             payment_id = create_payment(
                 booking["id"],
                 booking["user_id"],
                 booking["amount"],
-                f"Credit Card (****{card_last4})"
+                f"{card_type} (****{card_last4})",
             )
-            
-            # Simulate successful payment
+
             transaction_ref = f"TXN{datetime.now().strftime('%Y%m%d%H%M%S')}{booking['id']}"
             update_payment_status(payment_id, "completed", transaction_ref)
-            
-            # Activate the booking
             activate_booking(booking["booking_ref"])
-            
-            # Send notification
-            user = get_user(booking["user_id"])
+
             send_notification(
                 booking["user_id"],
                 "payment_confirmed",
                 "Payment Successful ✅",
                 f"Your parking booking {booking['booking_ref']} is confirmed for {booking['from_date']}",
-                "push"
+                "push",
             )
-            
-            # Success message
+
+            # Clear payment session flags
+            st.session_state.pop("pay_otp_stage", None)
+            st.session_state.pop("pay_expected_otp", None)
+            st.session_state.pop("pay_card_meta", None)
+
             st.success("✅ Payment Successful!")
-            st.balloons()
-            
+
             st.markdown(f"""
             <div style='background:#1e222c;border-radius:8px;padding:16px;margin-top:1rem;border:1px solid #22c55e'>
                 <div style='color:#22c55e;font-weight:700;margin-bottom:8px'>Payment Confirmed</div>
                 <div style='font-size:13px;color:#9aa0b4;line-height:1.6'>
                     <div>✅ Booking Reference: <code>{booking["booking_ref"]}</code></div>
+                    <div>✅ Paid via: {card_type} (****{card_last4})</div>
                     <div>✅ Amount: ₹{booking["amount"]:.2f}</div>
                     <div>✅ Slot: {booking["slot_code"]} (Floor {booking["floor"]})</div>
                     <div>✅ Date: {booking["from_date"]}</div>
@@ -301,77 +298,12 @@ def _process_card_payment(booking, cardholder, card_last4):
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("📋 View Booking", use_container_width=True):
-                    st.switch_page("pages/user_ui_updated.py")
-            with col2:
-                if st.button("📥 Download Receipt", use_container_width=True):
-                    st.info("Receipt download feature coming soon!")
-        
-        except Exception as e:
-            st.error(f"❌ Payment failed: {str(e)}")
-            st.info("Please try again or contact support.")
 
+            if st.button("📋 View My Bookings", use_container_width=True):
+                st.session_state.pop("pay_booking_ref", None)
+                st.session_state["user_current_page"] = "bookings"
+                st.rerun()
 
-def _process_upi_payment(booking, upi_id):
-    """Process UPI payment."""
-    with st.spinner("🔄 Redirecting to UPI app..."):
-        time.sleep(2)  # Simulate UPI redirect
-        
-        try:
-            # Create payment record
-            payment_id = create_payment(
-                booking["id"],
-                booking["user_id"],
-                booking["amount"],
-                f"UPI ({upi_id})"
-            )
-            
-            # Simulate successful UPI payment
-            transaction_ref = f"UPI{datetime.now().strftime('%Y%m%d%H%M%S')}{booking['id']}"
-            update_payment_status(payment_id, "completed", transaction_ref)
-            
-            # Activate the booking
-            activate_booking(booking["booking_ref"])
-            
-            # Send notification
-            user = get_user(booking["user_id"])
-            send_notification(
-                booking["user_id"],
-                "payment_confirmed",
-                "Payment Successful ✅",
-                f"Your parking booking {booking['booking_ref']} is confirmed for {booking['from_date']}",
-                "push"
-            )
-            
-            # Success message
-            st.success("✅ UPI Payment Successful!")
-            st.balloons()
-            
-            st.markdown(f"""
-            <div style='background:#1e222c;border-radius:8px;padding:16px;margin-top:1rem;border:1px solid #22c55e'>
-                <div style='color:#22c55e;font-weight:700;margin-bottom:8px'>Payment Confirmed via UPI</div>
-                <div style='font-size:13px;color:#9aa0b4;line-height:1.6'>
-                    <div>✅ Booking Reference: <code>{booking["booking_ref"]}</code></div>
-                    <div>✅ UPI ID: {upi_id}</div>
-                    <div>✅ Amount: ₹{booking["amount"]:.2f}</div>
-                    <div>✅ Slot: {booking["slot_code"]} (Floor {booking["floor"]})</div>
-                    <div>✅ Date: {booking["from_date"]}</div>
-                    <div style='margin-top:8px;font-size:11px'>Transaction ID: {transaction_ref}</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("📋 View Booking", use_container_width=True):
-                    st.switch_page("pages/user_ui_updated.py")
-            with col2:
-                if st.button("📥 Download Receipt", use_container_width=True):
-                    st.info("Receipt download feature coming soon!")
-        
         except Exception as e:
             st.error(f"❌ Payment failed: {str(e)}")
             st.info("Please try again or contact support.")

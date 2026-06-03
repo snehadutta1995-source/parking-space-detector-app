@@ -9,6 +9,7 @@ from datetime import datetime, time, timedelta
 import qrcode
 import urllib.parse
 import io
+import base64
 
 from pathlib import Path
 
@@ -24,94 +25,351 @@ from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_
 
 
 # ─────────────────────────────────────────────
+# Footer Overlay Dialogs
+# ─────────────────────────────────────────────
+@st.experimental_dialog("🏠 Home", width="large")
+def _footer_home_dialog():
+    st.markdown("""
+    ### Welcome to SLotX
+
+    **Smart Parking Management System**
+
+    SLotX is a next-generation parking slot management solution designed to make parking
+    convenient, efficient, and hassle-free.
+
+    #### Key Features
+    - 🗺️ **Real-time Availability** - See available slots instantly
+    - 📅 **Pre-Booking** - Reserve your slot in advance
+    - 💳 **Secure Payments** - Multiple payment options available
+    - 📊 **Smart Analytics** - Track your parking history
+    - 🎫 **QR Entry/Exit** - Seamless gate entry with QR codes
+
+    #### How It Works
+    1. **Browse** available parking slots in real-time
+    2. **Book** your preferred slot and time
+    3. **Pay** securely through our payment gateway
+    4. **Generate QR** for gate entry
+    5. **Park** without hassle!
+
+    Start booking your parking slot today!
+    """)
+
+
+@st.experimental_dialog("ℹ️ About Us", width="large")
+def _footer_about_dialog():
+    st.markdown("""
+    ### About SLotX
+
+    SLotX is revolutionizing urban parking management through intelligent technology and
+    user-centric design.
+
+    #### Our Mission
+    To simplify parking and reduce parking-related stress through smart solutions.
+
+    #### Our Vision
+    A world where parking is no longer a hassle, but a seamless experience integrated
+    into urban mobility.
+
+    #### Why Choose SLotX?
+    - **Innovative Technology** - Built with cutting-edge parking management algorithms
+    - **User-Friendly** - Intuitive interface designed for everyone
+    - **Reliable** - 99.9% uptime and secure transactions
+    - **Eco-Friendly** - Reduce time spent searching for parking, lower emissions
+    - **24/7 Support** - Always here to help
+
+    #### Our Team
+    A dedicated team of parking experts, engineers, and designers working to
+    transform the parking experience.
+    """)
+
+
+@st.experimental_dialog("📧 Contact Us", width="large")
+def _footer_contact_dialog():
+    st.markdown("""
+    ### Get in Touch
+
+    Have questions or feedback? We'd love to hear from you!
+
+    #### Contact Information
+    - **Email:** support@slotx.com
+    - **Phone:** +91 1800-SLOTX-11
+    - **Website:** www.slotx.com
+    - **Office:** Smart Parking Solutions Pvt. Ltd., Tech Park, Bangalore, India
+
+    #### Business Hours
+    - Monday - Friday: 9:00 AM - 6:00 PM IST
+    - Saturday: 10:00 AM - 4:00 PM IST
+    - Sunday: Closed
+
+    #### Quick Support
+    For urgent issues, reach out to our support team at support@slotx.com
+    """)
+
+
+@st.experimental_dialog("🔒 Privacy & Security", width="large")
+def _footer_privacy_dialog():
+    st.markdown("""
+    ### Privacy & Security
+
+    Your data is important to us. We follow industry-leading standards to protect
+    your information.
+
+    #### Data Protection
+    - All personal data is encrypted with AES-256 encryption
+    - Payment information is PCI-DSS compliant
+    - We never share your data with third parties without consent
+
+    #### Privacy Policy
+    We collect only essential information needed to provide parking services.
+    Your data is stored securely and used only for service improvement.
+
+    #### Cookie Policy
+    We use cookies to enhance your experience. You can manage cookie preferences
+    in your browser settings.
+
+    #### Your Rights
+    - Right to access your data
+    - Right to correct your information
+    - Right to delete your account
+    - Right to data portability
+    """)
+
+
+@st.experimental_dialog("📋 Terms of Service", width="large")
+def _footer_terms_dialog():
+    st.markdown("""
+    ### Terms of Service
+
+    By using SLotX, you agree to these terms and conditions.
+
+    #### Usage Terms
+    - Users must be 18+ years old to use this service
+    - One user account per person
+    - Bookings must be used by the registered user
+    - Abusive behavior will result in account suspension
+
+    #### Payment Terms
+    - All payments are non-refundable except in case of system errors
+    - Booking cancellations must be done before the booking time
+    - Late cancellations may incur charges
+
+    #### Liability
+    SLotX provides the platform as-is. We are not liable for technical failures
+    beyond our control.
+
+    #### Changes to Terms
+    We may update these terms anytime. Continued use means acceptance of changes.
+    """)
+
+
+def _render_footer(user):
+    """Render the footer section with navigation and info links."""
+    st.markdown("---")
+    st.markdown("""
+    <div style='padding: 20px 0; color: #9aa0b4; font-size: 13px;'>
+    """, unsafe_allow_html=True)
+
+    # Footer Navigation
+    footer_cols = st.columns([1, 1, 1, 1, 1])
+
+    with footer_cols[0]:
+        if st.button("🏠 Home", use_container_width=True):
+            _footer_home_dialog()
+
+    with footer_cols[1]:
+        if st.button("ℹ️ About Us", use_container_width=True):
+            _footer_about_dialog()
+
+    with footer_cols[2]:
+        if st.button("📧 Contact", use_container_width=True):
+            _footer_contact_dialog()
+
+    with footer_cols[3]:
+        if st.button("🔒 Privacy", use_container_width=True):
+            _footer_privacy_dialog()
+
+    with footer_cols[4]:
+        if st.button("📋 Terms", use_container_width=True):
+            _footer_terms_dialog()
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; padding-top: 10px; color: #6b7280; font-size: 11px;'>© 2026 SLotX — Smart Parking Solutions. All rights reserved.</div>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────
 def render_user():
     st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
+
+    BASE_DIR = Path(__file__).resolve().parents[1]
+    LOGO_PATH = BASE_DIR / "slotx_logo.jpeg"
+
+    # Hide sidebar and expand content to full width (user portal only)
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarNav"],
+    .sidebar { display: none !important; width: 0 !important; }
+    [data-testid="stMainBlockContainer"],
+    .main { width: 100% !important; max-width: 100% !important; }
+    .stAppViewContainer { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
+    [data-testid="stContainer"] { width: 100% !important; }
+    .element-container { width: 100% !important; }
+
+    /* Left Panel Styling */
+    .left-panel {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 100px;
+        height: 100vh;
+        background: linear-gradient(180deg, #0b0c0f 0%, #111318 50%, #0b0c0f 100%);
+        border-right: 1px solid #2a2f3d;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 20px 0;
+        gap: 30px;
+        z-index: 999;
+    }
+    .left-panel-logo {
+        width: 75px;
+        height: 75px;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(79, 124, 255, 0.3);
+        flex-shrink: 0;
+    }
+    .left-panel-logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Left panel with logo and dark mode toggle (fixed position)
+    dark_mode = st.session_state.dark
+    dark_label = f"{'🌙' if dark_mode else '☀️'}"
+
+    st.markdown(f"""
+    <div class="left-panel">
+        <div class="left-panel-logo">
+            <img src="file:///{LOGO_PATH}" alt="SLotX" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px;">
+        </div>
+        <button id="dark-mode-btn" style="position: fixed; left: 20px; top: 130px; width: 60px; height: 60px; background: linear-gradient(135deg, #4f7cff, #22c55e); border-radius: 50%; border: none; cursor: pointer; font-size: 24px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); z-index: 999; transition: transform 0.2s ease;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+            {dark_label}
+        </button>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Display logo using Streamlit (for actual rendering)
+    if LOGO_PATH.exists():
+        st.markdown(f"""
+        <div style="position: absolute; top: -9999px; left: -9999px; width: 75px; height: 75px;">
+        """, unsafe_allow_html=True)
+        st.image(str(LOGO_PATH), width=75)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Dark mode toggle button (invisible, positioned off-screen)
+    st.markdown('<div style="position: absolute; top: -9999px; left: -9999px;">', unsafe_allow_html=True)
+    if st.button(dark_label, key="left_dark_toggle"):
+        st.session_state.dark = not st.session_state.dark
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
     user = st.session_state.user
 
-    # ── Sidebar ───────────────────────────────
-    with st.sidebar:
-        # SLotX Logo & Branding
-        st.markdown(f"""
-        <div style='display:flex;align-items:center;gap:10px;padding:6px 0 16px'>
-          <div style='width:36px;height:36px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:8px;
-                      display:flex;align-items:center;justify-content:center;
-                      font-family:Syne,sans-serif;font-weight:800;font-size:18px;color:#fff'>S</div>
-          <div>
-            <div style='font-family:Syne,sans-serif;font-size:15px;font-weight:700'>SLotX</div>
-            <div style='font-size:11px;color:#9aa0b4'>User Portal</div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+    # ── Payment interface (when a booking is awaiting payment) ──
+    if st.session_state.get("pay_booking_ref"):
+        from payment_page import render_payment
+        render_payment()
+        return
 
-        # User Info Card
-        initials = "".join(p[0].upper() for p in user["name"].split()[:2])
-        st.markdown(f"""
-        <div style='display:flex;align-items:center;gap:10px;background:#1e222c;
-                    border-radius:8px;padding:12px;margin-bottom:1rem;border:1px solid #2a2f3d'>
-          <div style='width:40px;height:40px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:50%;
-                      display:flex;align-items:center;justify-content:center;
-                      font-size:16px;font-weight:700;color:#fff'>{initials}</div>
-          <div>
-            <div style='font-size:13px;font-weight:600;color:#e8eaf0'>{user['name']}</div>
-            <div style='font-size:11px;color:#9aa0b4'>Parking Member</div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+    # ── Top Bar: Navigation Buttons + Sign Out ────
+    top_bar_cols = st.columns([5.8, 0.7])
 
-        page = st.radio(
-            "Navigation",
-            ["🗺️ Availability", "📅 Pre-Book", "📋 My Bookings", "💰 Rates", "👤 Profile"],
-            label_visibility="collapsed",
-        )
+    # Left: Navigation Buttons
+    with top_bar_cols[0]:
+        nav_buttons = st.columns(5, gap="small")
+        nav_items = [
+            ("🗺️ Availability", "availability"),
+            ("📅 Pre-Book", "prebook"),
+            ("📋 My Bookings", "bookings"),
+            ("💰 Rates", "rates"),
+            ("👤 Profile", "profile"),
+        ]
 
-        st.divider()
+        # Initialize current page in session state
+        if "user_current_page" not in st.session_state:
+            st.session_state.user_current_page = "availability"
 
-        # Notifications & Availability
-        notifs = get_user_notifications(user["id"], limit=5)
-        unread = len([n for n in notifs if n["status"] == "sent"])
-        
-        col_notif, col_avail = st.columns(2)
-        
-        with col_notif:
-            st.markdown(
-                f"<div style='text-align:center'><div style='font-size:11px;color:#9aa0b4;text-transform:uppercase;letter-spacing:.06em'>Notifications</div>"
-                f"<div style='font-family:Syne;font-size:22px;font-weight:800;color:#4f7cff'>{unread}</div>"
-                f"<div style='font-size:10px;color:#9aa0b4'>unread</div></div>",
-                unsafe_allow_html=True,
-            )
-        
-        with col_avail:
-            slots = get_all_slots()
-            vac   = sum(1 for s in slots if s["status"] == "vacant")
-            st.markdown(
-                f"<div style='text-align:center'><div style='font-size:11px;color:#9aa0b4;text-transform:uppercase;letter-spacing:.06em'>Available</div>"
-                f"<div style='font-family:Syne;font-size:22px;font-weight:800;color:#22c55e'>{vac}</div>"
-                f"<div style='font-size:10px;color:#9aa0b4'>slots free</div></div>",
-                unsafe_allow_html=True,
-            )
+        for col, (label, page_key) in zip(nav_buttons, nav_items):
+            with col:
+                if st.button(label, use_container_width=True, key=f"nav_{page_key}"):
+                    st.session_state.user_current_page = page_key
+                    st.rerun()
 
-        st.divider()
-        
-        col_theme, col_logout = st.columns(2)
-        
-        with col_theme:
-            dark = st.toggle("Dark mode", value=st.session_state.dark)
-            if dark != st.session_state.dark:
-                st.session_state.dark = dark
-                st.rerun()
+        # Determine which page to show
+        page = st.session_state.user_current_page
 
-        with col_logout:
-            if st.button("Sign Out", use_container_width=True):
-                for k in ["logged_in", "user", "role"]:
-                    st.session_state[k] = None if k != "logged_in" else False
-                st.rerun()
+    # Right: Sign Out Button
+    with top_bar_cols[1]:
+        if st.button("➡️ Sign Out", use_container_width=True, key="logout_user"):
+            for k in ["logged_in", "user", "role"]:
+                st.session_state[k] = None if k != "logged_in" else False
+            st.rerun()
+
+    # ── Floating Dark Mode Button ────
+    dark_mode = st.session_state.dark
+    dark_label = f"{'🌙 Dark' if dark_mode else '☀️ Light'}"
+
+    st.markdown(f"""
+    <style>
+    .floating-dark-mode {{
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        z-index: 999;
+        background: linear-gradient(135deg, #4f7cff, #22c55e);
+        border: none;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        font-size: 28px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        transition: transform 0.2s ease;
+    }}
+    .floating-dark-mode:hover {{
+        transform: scale(1.1);
+    }}
+    .floating-dark-mode:active {{
+        transform: scale(0.95);
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_empty, col_float = st.columns([11.5, 0.5])
+    with col_float:
+        if st.button(dark_label, key="floating_dark_mode", help="Toggle Dark/Light Mode"):
+            st.session_state.dark = not st.session_state.dark
+            st.rerun()
+
+    st.divider()
 
     # ── Page routing ─────────────────────────
-    if   page.startswith("🗺️"): _availability()
-    elif page.startswith("📅"): _pre_book()
-    elif page.startswith("📋"): _my_bookings()
-    elif page.startswith("💰"): _rates_view()
-    elif page.startswith("👤"): _profile_page()
+    if   page == "availability": _availability()
+    elif page == "prebook": _pre_book()
+    elif page == "bookings": _my_bookings()
+    elif page == "rates": _rates_view()
+    elif page == "profile": _profile_page()
+
+    # ── Footer (shown on all pages) ──────────
+    _render_footer(user)
 
 
 # ─────────────────────────────────────────────
@@ -238,7 +496,7 @@ def _pre_book():
         with col_form:
             st.markdown("#### Booking Details")
 
-            with st.form("booking_form"):
+            with st.container():
                 vehicle_no = st.text_input("Vehicle Number", placeholder="MH12AB1234").upper()
                 vtype      = st.selectbox("Vehicle Type", ["4-wheeler", "2-wheeler"])
                 booking_date = st.date_input("Booking Date", value=datetime.now().date(), 
@@ -250,7 +508,7 @@ def _pre_book():
                 vac_slots = [s for s in slots if s["status"] == "vacant" and s["type"] == vtype]
                 if not vac_slots:
                     st.warning(f"❌ No vacant {vtype} slots available.")
-                    st.form_submit_button("Book Now", disabled=True)
+                    st.button("Book Now", disabled=True)
                     return
 
                 slot_opts  = {f"{s['slot_code']} — Floor {s['floor']}": s for s in vac_slots}
@@ -266,7 +524,7 @@ def _pre_book():
                 rate   = rates.get(vtype, 30 if vtype == "4-wheeler" else 10)
                 amount = rate * duration
 
-                submitted = st.form_submit_button("✅ Book Now", use_container_width=True)
+                submitted = st.button("✅ Book Now", use_container_width=True)
 
         with col_summary:
             st.markdown("#### Fare Summary")
@@ -323,40 +581,9 @@ def _pre_book():
                     amount     = amount,
                 )
                 
-                # Show booking confirmation with payment option
-                st.success(f"✅ Booking Created! Ref: **{ref}**")
-                st.balloons()
-                
-                st.markdown(f"""
-                <div style='background:#1e222c;border-radius:8px;padding:16px;margin-top:1rem;border:1px solid #4f7cff'>
-                    <div style='color:#4f7cff;font-weight:700;margin-bottom:12px'>Your Booking Details</div>
-                    <div style='font-size:13px;color:#9aa0b4;line-height:1.8'>
-                        <div><b>Reference:</b> <code style='color:#22c55e'>{ref}</code></div>
-                        <div><b>Slot:</b> {sel_slot['slot_code']} (Floor {sel_slot['floor']})</div>
-                        <div><b>Date:</b> {booking_date.strftime("%d %b %Y")}</div>
-                        <div><b>Time:</b> {from_t.strftime("%H:%M")} - {to_t.strftime("%H:%M")}</div>
-                        <div><b>Vehicle:</b> {vehicle_no}</div>
-                        <div style='margin-top:8px;padding-top:8px;border-top:1px solid #2a2f3d'>
-                            <div style='font-size:11px'>Amount Due: <span style='color:#f59e0b;font-weight:700'>₹{amount:.2f}</span></div>
-                        </div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                st.warning("⚠️ This booking is pending payment. Please proceed to payment to confirm.")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("💳 Proceed to Payment", use_container_width=True, key="pay_btn"):
-                        st.markdown(
-                            f'<meta http-equiv="refresh" content="0; url=/?page=payment_page&booking_ref={ref}">',
-                            unsafe_allow_html=True
-                        )
-                        st.info(f"Redirecting to payment page... Click [here](/?page=payment_page&booking_ref={ref}) if not redirected.")
-                
-                with col2:
-                    if st.button("📋 View My Bookings", use_container_width=True):
-                        st.rerun()
+                # Booking created (pending) — go straight to the payment interface.
+                st.session_state["pay_booking_ref"] = ref
+                st.rerun()
 
     # ── Waitlist tab ───────────────────────────
     with tab_waitlist:
@@ -412,8 +639,8 @@ def _my_bookings():
         if not active_bookings:
             st.info("No active bookings")
         else:
-            _display_bookings_list(active_bookings)
-    
+            _display_bookings_grid(active_bookings)
+
     with tab_pending:
         pending_bookings = [b for b in bookings if b["status"] == "pending"]
         if not pending_bookings:
@@ -434,6 +661,64 @@ def _my_bookings():
             st.info("No cancelled bookings")
         else:
             _display_bookings_list(cancelled_bookings)
+
+
+def _qr_buffer(b, box_size: int = 8):
+    """Build a PNG buffer of the booking QR code."""
+    qr_data = f"SLOTX|{b['booking_ref']}|{b['vehicle_no']}|{b['slot_code']}"
+    qr = qrcode.QRCode(version=1, box_size=box_size)
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    qr_img.save(buf, "PNG")
+    buf.seek(0)
+    return buf
+
+
+@st.experimental_dialog("📱 Booking QR Code")
+def _qr_dialog(b):
+    """Large QR overlay. The dialog provides a built-in dismiss (✕) icon."""
+    st.markdown(
+        f"<div style='text-align:center;font-family:Syne,sans-serif;font-weight:700;"
+        f"font-size:18px;margin-bottom:4px'>{b['booking_ref']}</div>"
+        f"<div style='text-align:center;color:#9aa0b4;font-size:13px;margin-bottom:12px'>"
+        f"Slot {b['slot_code']} · {b['vehicle_no']}</div>",
+        unsafe_allow_html=True,
+    )
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.image(_qr_buffer(b, box_size=16), use_column_width=True)
+    st.caption("Scan this code at the gate to check in / out.")
+
+
+def _render_active_qr(b, key_prefix: str):
+    """Render the QR image as the clickable target (button is invisible but positioned over it)."""
+    uid = f"{key_prefix}_{b['id']}"
+
+    # Render the QR image directly and visibly.
+    st.image(_qr_buffer(b), width=150, use_column_width=False)
+
+    # CSS to make the button invisible but still clickable, positioned over the image.
+    st.markdown(
+        f"<style>"
+        f"/* Target the button that comes right after the image (sibling selector) */"
+        f"[data-testid='stImage'] + [data-testid='stButton'] button {{"
+        f"  opacity: 0 !important;"
+        f"  cursor: pointer;"
+        f"  margin-top: -155px !important;"
+        f"  width: 150px !important;"
+        f"  height: 150px !important;"
+        f"  padding: 0 !important;"
+        f"  border: none !important;"
+        f"}}"
+        f"</style>",
+        unsafe_allow_html=True,
+    )
+
+    # Invisible button that's clickable (positioned over the image via CSS).
+    if st.button("", key=f"qrbtn_{uid}"):
+        _qr_dialog(b)
 
 
 def _display_bookings_list(bookings):
@@ -465,15 +750,42 @@ def _display_bookings_list(bookings):
             
             with col2:
                 if b["status"] == "active":
-                    qr_data = f"SLOTX|{b['booking_ref']}|{b['vehicle_no']}|{b['slot_code']}"
-                    qr = qrcode.QRCode(version=1, box_size=8)
-                    qr.add_data(qr_data)
-                    qr.make(fit=True)
-                    qr_img = qr.make_image(fill_color="black", back_color="white")
-                    buf = io.BytesIO()
-                    qr_img.save(buf, "PNG")
-                    buf.seek(0)
-                    st.image(buf, use_column_width=True)
+                    _render_active_qr(b, key_prefix="list")
+
+
+def _display_bookings_grid(bookings, cols_per_row: int = 3):
+    """Display active bookings as a grid of cards."""
+    spent = sum(b["amount"] for b in bookings)
+
+    m1, m2 = st.columns(2)
+    m1.metric("Active Bookings", len(bookings))
+    m2.metric("Total Amount", f"₹{spent:.0f}")
+
+    st.divider()
+
+    for i in range(0, len(bookings), cols_per_row):
+        row = bookings[i:i + cols_per_row]
+        cols = st.columns(cols_per_row)
+        for col, b in zip(cols, row):
+            with col:
+                with st.container(border=True):
+                    st.markdown(
+                        f"<div style='font-family:Syne,sans-serif;font-weight:700;font-size:15px'>"
+                        f"🟢 {b['booking_ref']}</div>"
+                        f"<div style='color:#9aa0b4;font-size:12px;margin-bottom:8px'>"
+                        f"Slot {b['slot_code']} · Floor {b['floor']}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(f"""
+                    - **Vehicle:** {b['vehicle_no']}
+                    - **Date:** {b['from_date']}
+                    - **Time:** {b['from_time']} – {b['to_time']}
+                    - **Duration:** {b['duration_hr']} hour(s)
+                    - **Amount:** ₹{b['amount']:.0f}
+                    """)
+
+                    if st.button("📱 Click to Generate QR", key=f"qr_btn_{b['id']}", use_container_width=True):
+                        _qr_dialog(b)
 
 
 def _display_pending_bookings(bookings):
@@ -498,11 +810,8 @@ def _display_pending_bookings(bookings):
                 col_pay, col_cancel = st.columns(2)
                 with col_pay:
                     if st.button(f"💳 Pay Now", key=f"pay_{b['id']}"):
-                        st.markdown(
-                            f'<meta http-equiv="refresh" content="0; url=/?page=payment_page&booking_ref={b["booking_ref"]}">',
-                            unsafe_allow_html=True
-                        )
-                        st.info(f"Redirecting to payment...")
+                        st.session_state["pay_booking_ref"] = b["booking_ref"]
+                        st.rerun()
                 
                 with col_cancel:
                     if st.button(f"❌ Cancel", key=f"cancel_{b['id']}"):

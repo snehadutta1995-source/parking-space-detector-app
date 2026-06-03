@@ -6,6 +6,25 @@ DARK_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap');
 
+/* Hide Streamlit's auto-generated multipage navigation (app, admin_ui, user_ui, ...) */
+[data-testid="stSidebarNav"] { display: none !important; }
+
+/* Remove the native "View fullscreen" button that appears over images */
+[data-testid="StyledFullScreenButton"],
+button[title="View fullscreen"],
+button[title="Exit fullscreen"] { display: none !important; }
+
+/* Hide Streamlit's built-in header controls (menu, settings, etc.) */
+button[data-testid="stToolbarButtonLangOptions"],
+button[data-testid="stToolbarButtonMoreOptions"],
+[data-testid="stToolbar"] { display: none !important; }
+button[title*="menu"],
+button[title*="settings"],
+button[title*="More options"],
+button[aria-label*="menu"],
+button[aria-label*="More options"] { display: none !important; }
+
+
 :root {
     --bg:      #0b0c0f;
     --bg2:     #111318;
@@ -326,6 +345,25 @@ hr { border-color: #2a2f3d !important; }
 LIGHT_CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap');
+
+/* Hide Streamlit's auto-generated multipage navigation (app, admin_ui, user_ui, ...) */
+[data-testid="stSidebarNav"] { display: none !important; }
+
+/* Remove the native "View fullscreen" button that appears over images */
+[data-testid="StyledFullScreenButton"],
+button[title="View fullscreen"],
+button[title="Exit fullscreen"] { display: none !important; }
+
+/* Hide Streamlit's built-in header controls (menu, settings, etc.) */
+button[data-testid="stToolbarButtonLangOptions"],
+button[data-testid="stToolbarButtonMoreOptions"],
+[data-testid="stToolbar"] { display: none !important; }
+button[title*="menu"],
+button[title*="settings"],
+button[title*="More options"],
+button[aria-label*="menu"],
+button[aria-label*="More options"] { display: none !important; }
+
 
 @keyframes slideUp {
     from { opacity: 0; transform: translateY(20px); }

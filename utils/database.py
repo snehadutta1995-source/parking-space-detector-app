@@ -563,6 +563,44 @@ def log_exit(booking_id: int):
     conn.close()
 
 
+def log_entry_by_ref(booking_ref: str, gate: str = "Main"):
+    """Log vehicle entry using a booking reference. Returns (ok, message)."""
+    booking_ref = (booking_ref or "").strip()
+    if not booking_ref:
+        return False, "Please enter a booking reference."
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT id FROM bookings WHERE booking_ref=?", (booking_ref,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return False, f"No booking found for reference '{booking_ref}'."
+    log_entry(row["id"], gate)
+    return True, f"Entry logged for {booking_ref} at {gate} gate."
+
+
+def log_exit_by_ref(booking_ref: str):
+    """Log vehicle exit using a booking reference. Returns (ok, message)."""
+    booking_ref = (booking_ref or "").strip()
+    if not booking_ref:
+        return False, "Please enter a booking reference."
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT id FROM bookings WHERE booking_ref=?", (booking_ref,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return False, f"No booking found for reference '{booking_ref}'."
+    entry = conn.execute(
+        "SELECT id FROM entry_exit_logs WHERE booking_id=?", (row["id"],)
+    ).fetchone()
+    conn.close()
+    if not entry:
+        return False, f"No entry recorded for '{booking_ref}'. Log entry first."
+    log_exit(row["id"])
+    return True, f"Exit logged for {booking_ref}."
+
+
 def get_entry_exit_logs(days: int = 7):
     """Get recent entry/exit logs."""
     conn = get_conn()
