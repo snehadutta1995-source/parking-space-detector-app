@@ -23,6 +23,9 @@ from utils.database import (
 )
 from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS
 
+if not hasattr(st, "experimental_dialog") and hasattr(st, "dialog"):
+    st.experimental_dialog = st.dialog
+
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 BASE_DIR = Path(__file__).resolve().parents[1]

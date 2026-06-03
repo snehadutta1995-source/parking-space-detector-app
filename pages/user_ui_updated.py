@@ -23,6 +23,9 @@ from utils.database import (
 )
 from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS
 
+if not hasattr(st, "experimental_dialog") and hasattr(st, "dialog"):
+    st.experimental_dialog = st.dialog
+
 
 # ─────────────────────────────────────────────
 # Footer Overlay Dialogs
@@ -280,14 +283,8 @@ def render_user():
 
     user = st.session_state.user
 
-    # ── Payment interface (when a booking is awaiting payment) ──
-    if st.session_state.get("pay_booking_ref"):
-        from payment_page import render_payment
-        render_payment()
-        return
-
     # ── Top Bar: Navigation Buttons + Sign Out ────
-    top_bar_cols = st.columns([5.8, 0.7])
+    top_bar_cols = st.columns([5.4, 1.1])
 
     # Left: Navigation Buttons
     with top_bar_cols[0]:
@@ -316,50 +313,29 @@ def render_user():
     # Right: Sign Out Button
     with top_bar_cols[1]:
         if st.button("➡️ Sign Out", use_container_width=True, key="logout_user"):
-            for k in ["logged_in", "user", "role"]:
-                st.session_state[k] = None if k != "logged_in" else False
-            st.rerun()
-
-    # ── Floating Dark Mode Button ────
-    dark_mode = st.session_state.dark
-    dark_label = f"{'🌙 Dark' if dark_mode else '☀️ Light'}"
-
-    st.markdown(f"""
-    <style>
-    .floating-dark-mode {{
-        position: fixed;
-        bottom: 30px;
-        right: 30px;
-        z-index: 999;
-        background: linear-gradient(135deg, #4f7cff, #22c55e);
-        border: none;
-        border-radius: 50%;
-        width: 60px;
-        height: 60px;
-        font-size: 28px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        transition: transform 0.2s ease;
-    }}
-    .floating-dark-mode:hover {{
-        transform: scale(1.1);
-    }}
-    .floating-dark-mode:active {{
-        transform: scale(0.95);
-    }}
-    </style>
-    """, unsafe_allow_html=True)
-
-    col_empty, col_float = st.columns([11.5, 0.5])
-    with col_float:
-        if st.button(dark_label, key="floating_dark_mode", help="Toggle Dark/Light Mode"):
-            st.session_state.dark = not st.session_state.dark
+            for k in [
+                "logged_in",
+                "user",
+                "role",
+                "user_current_page",
+                "pay_booking_ref",
+                "pay_otp_stage",
+                "pay_expected_otp",
+                "pay_card_meta",
+            ]:
+                if k == "logged_in":
+                    st.session_state[k] = False
+                else:
+                    st.session_state.pop(k, None)
             st.rerun()
 
     st.divider()
+
+    # ── Payment interface (when a booking is awaiting payment) ──
+    if st.session_state.get("pay_booking_ref"):
+        from payment_page import render_payment
+        render_payment()
+        return
 
     # ── Page routing ─────────────────────────
     if   page == "availability": _availability()
