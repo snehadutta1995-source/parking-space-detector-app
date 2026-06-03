@@ -76,13 +76,13 @@ if not st.session_state.splash_done:
 if st.session_state.logged_in:
     if st.session_state.role == "admin":
         try:
-            from pages.admin_ui_updated import render_admin
+            from pages.admin_ui import render_admin
             render_admin()
         except ImportError:
             st.error("Admin module not found. Please ensure pages/admin_ui.py exists.")
     else:
         try:
-            from pages.user_ui_updated import render_user
+            from pages.user_ui import render_user
             render_user()
         except ImportError:
             st.error("User module not found. Please ensure pages/user_ui.py exists.")
