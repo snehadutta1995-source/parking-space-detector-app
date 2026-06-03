@@ -46,43 +46,192 @@ for k, v in defaults.items():
 st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
 
 # ── Splash screen ────────────────────────────
-if not st.session_state.splash_done:
-    st.markdown("""
-    <style>
-      [data-testid="stSidebar"]{display:none;}
-      .slotx-splash{min-height:90vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
-      .slotx-logo{width:140px;height:140px;object-fit:cover;border-radius:24px;box-shadow:0 0 45px rgba(0,245,255,.45);margin-bottom:22px;}
-      .slotx-title{font-family:Arial,sans-serif;font-size:56px;font-weight:900;letter-spacing:8px;background:linear-gradient(90deg,#00f5ff,#22c55e,#4f7cff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-      .slotx-tag{color:#b9fff8;letter-spacing:2px;margin-bottom:20px;font-size:18px;}
-    </style>
-    """, unsafe_allow_html=True)
-    st.markdown('<div class="slotx-splash">', unsafe_allow_html=True)
-    if LOGO_PATH.exists():
-        st.image(str(LOGO_PATH), width=140)
-    st.markdown('<div class="slotx-title">SLOTX</div><div class="slotx-tag">Smart Parking. Smarter Future.</div>', unsafe_allow_html=True)
-    if SPLASH_VIDEO_PATH.exists():
-        st.video(str(SPLASH_VIDEO_PATH))
-    progress = st.progress(0)
-    status = st.empty()
-    for i in range(101):
-        progress.progress(i)
-        status.markdown(f"<div style='text-align:center;color:#9ff'>Loading smart parking dashboard... {i}%</div>", unsafe_allow_html=True)
-        time.sleep(0.08)
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.session_state.splash_done = True
-    st.rerun()
+# Initialize session state variables
+if "splash_shown" not in st.session_state:
+    st.session_state.splash_shown = False
+
+if "splash_start_time" not in st.session_state:
+    st.session_state.splash_start_time = None
+
+if not st.session_state.splash_shown:
+    if st.session_state.splash_start_time is None:
+        st.session_state.splash_start_time = time.time()
+    
+    elapsed_time = time.time() - st.session_state.splash_start_time
+    
+    # Display splash screen for 5 seconds
+    if elapsed_time < 5:
+        st.markdown("""
+        <style>
+            .splash-container {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f1729 100%);
+                flex-direction: column;
+                gap: 2rem;
+            }
+            
+            .splash-video-wrapper {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+                max-width: 500px;
+                border-radius: 20px;
+                overflow: hidden;
+                box-shadow: 0 25px 50px -12px rgba(79, 124, 255, 0.3),
+                            0 0 100px -20px rgba(34, 197, 94, 0.2);
+                border: 2px solid rgba(79, 124, 255, 0.2);
+                background: linear-gradient(135deg, rgba(79, 124, 255, 0.1), rgba(34, 197, 94, 0.1));
+                animation: splash-pulse 2s ease-in-out infinite;
+            }
+            
+            @keyframes splash-pulse {
+                0%, 100% {
+                    box-shadow: 0 25px 50px -12px rgba(79, 124, 255, 0.3),
+                                0 0 100px -20px rgba(34, 197, 94, 0.2);
+                }
+                50% {
+                    box-shadow: 0 25px 50px -12px rgba(79, 124, 255, 0.5),
+                                0 0 100px -10px rgba(34, 197, 94, 0.4);
+                }
+            }
+            
+            .splash-video-wrapper video {
+                width: 100%;
+                height: auto;
+                display: block;
+            }
+            
+            .splash-logo {
+                display: inline-flex;
+                align-items: center;
+                gap: 12px;
+                animation: fade-in 0.8s ease-out;
+            }
+            
+            .splash-logo-icon {
+                width: 60px;
+                height: 60px;
+                background: linear-gradient(135deg, #4f7cff, #22c55e);
+                border-radius: 15px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-family: Syne, sans-serif;
+                font-weight: 800;
+                font-size: 32px;
+                color: #fff;
+                box-shadow: 0 10px 25px rgba(79, 124, 255, 0.4);
+            }
+            
+            .splash-text {
+                text-align: center;
+                color: #e8eaf0;
+                animation: fade-in 1s ease-out;
+            }
+            
+            .splash-text h1 {
+                font-family: Syne, sans-serif;
+                font-size: 36px;
+                font-weight: 800;
+                margin: 0;
+                background: linear-gradient(135deg, #4f7cff, #22c55e);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }
+            
+            .splash-text p {
+                font-size: 14px;
+                color: #9aa0b4;
+                margin: 8px 0 0 0;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+            }
+            
+            .splash-progress {
+                margin-top: 2rem;
+                width: 60px;
+                height: 2px;
+                background: rgba(79, 124, 255, 0.1);
+                border-radius: 1px;
+                overflow: hidden;
+            }
+            
+            .splash-progress-bar {
+                height: 100%;
+                background: linear-gradient(90deg, #4f7cff, #22c55e);
+                border-radius: 1px;
+                animation: progress-load 5s ease-in-out forwards;
+                box-shadow: 0 0 10px rgba(79, 124, 255, 0.5);
+            }
+            
+            @keyframes progress-load {
+                0% { width: 0%; }
+                100% { width: 100%; }
+            }
+            
+            @keyframes fade-in {
+                from {
+                    opacity: 0;
+                    transform: translateY(20px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        col_l, col_c, col_r = st.columns([1, 2, 1])
+        with col_c:
+            st.markdown("""
+            <div class="splash-container">
+                <div class="splash-logo">
+                    <div class="splash-logo-icon">S</div>
+                </div>
+                <div class="splash-video-wrapper">
+            """, unsafe_allow_html=True)
+            
+            video_file = open('splash_video.mp4', 'rb')
+            st.video(video_file)
+            
+            st.markdown("""
+                </div>
+                <div class="splash-text">
+                    <h1>SLotX</h1>
+                    <p>Smart Parking System</p>
+                </div>
+                <div class="splash-progress">
+                    <div class="splash-progress-bar"></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Auto-redirect after 5 seconds
+        time.sleep(0.5)
+        st.rerun()
+    else:
+        # Mark splash as shown and redirect to login
+        st.session_state.splash_shown = True
+        st.session_state.splash_start_time = None
+        st.rerun()
 
 # ── Router ───────────────────────────────────
 if st.session_state.logged_in:
     if st.session_state.role == "admin":
         try:
-            from pages.admin_ui import render_admin
+            from pages.admin_ui_updated import render_admin
             render_admin()
         except ImportError:
             st.error("Admin module not found. Please ensure pages/admin_ui.py exists.")
     else:
         try:
-            from pages.user_ui import render_user
+            from pages.user_ui_updated import render_user
             render_user()
         except ImportError:
             st.error("User module not found. Please ensure pages/user_ui.py exists.")
