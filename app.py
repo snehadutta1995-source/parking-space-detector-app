@@ -8,6 +8,7 @@ Run: streamlit run app.py
 import streamlit as st
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
+import base64
 
 from utils.database import init_db, authenticate
 from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS
@@ -47,180 +48,78 @@ st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
 
 # ── Splash screen ────────────────────────────
 # Initialize session state variables
-if "splash_shown" not in st.session_state:
-    st.session_state.splash_shown = False
+# ── Splash screen / Intro page ────────────────────────────
+# Added splash video code only. Existing login/dashboard code below remains unchanged.
+if "intro_done" not in st.session_state:
+    st.session_state.intro_done = False
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = "login"
 
-if "splash_start_time" not in st.session_state:
-    st.session_state.splash_start_time = None
 
-if not st.session_state.splash_shown:
-    if st.session_state.splash_start_time is None:
-        st.session_state.splash_start_time = time.time()
-    
-    elapsed_time = time.time() - st.session_state.splash_start_time
-    
-    # Display splash screen for 5 seconds
-    if elapsed_time < 5:
-        st.markdown("""
-        <style>
-            .splash-container {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                min-height: 100vh;
-                background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f1729 100%);
-                flex-direction: column;
-                gap: 2rem;
-            }
-            
-            .splash-video-wrapper {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                width: 100%;
-                max-width: 500px;
-                border-radius: 20px;
-                overflow: hidden;
-                box-shadow: 0 25px 50px -12px rgba(79, 124, 255, 0.3),
-                            0 0 100px -20px rgba(34, 197, 94, 0.2);
-                border: 2px solid rgba(79, 124, 255, 0.2);
-                background: linear-gradient(135deg, rgba(79, 124, 255, 0.1), rgba(34, 197, 94, 0.1));
-                animation: splash-pulse 2s ease-in-out infinite;
-            }
-            
-            @keyframes splash-pulse {
-                0%, 100% {
-                    box-shadow: 0 25px 50px -12px rgba(79, 124, 255, 0.3),
-                                0 0 100px -20px rgba(34, 197, 94, 0.2);
-                }
-                50% {
-                    box-shadow: 0 25px 50px -12px rgba(79, 124, 255, 0.5),
-                                0 0 100px -10px rgba(34, 197, 94, 0.4);
-                }
-            }
-            
-            .splash-video-wrapper video {
-                width: 100%;
-                height: auto;
-                display: block;
-            }
-            
-            .splash-logo {
-                display: inline-flex;
-                align-items: center;
-                gap: 12px;
-                animation: fade-in 0.8s ease-out;
-            }
-            
-            .splash-logo-icon {
-                width: 60px;
-                height: 60px;
-                background: linear-gradient(135deg, #4f7cff, #22c55e);
-                border-radius: 15px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-family: Syne, sans-serif;
-                font-weight: 800;
-                font-size: 32px;
-                color: #fff;
-                box-shadow: 0 10px 25px rgba(79, 124, 255, 0.4);
-            }
-            
-            .splash-text {
-                text-align: center;
-                color: #e8eaf0;
-                animation: fade-in 1s ease-out;
-            }
-            
-            .splash-text h1 {
-                font-family: Syne, sans-serif;
-                font-size: 36px;
-                font-weight: 800;
-                margin: 0;
-                background: linear-gradient(135deg, #4f7cff, #22c55e);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
-            }
-            
-            .splash-text p {
-                font-size: 14px;
-                color: #9aa0b4;
-                margin: 8px 0 0 0;
-                letter-spacing: 1.5px;
-                text-transform: uppercase;
-            }
-            
-            .splash-progress {
-                margin-top: 2rem;
-                width: 60px;
-                height: 2px;
-                background: rgba(79, 124, 255, 0.1);
-                border-radius: 1px;
-                overflow: hidden;
-            }
-            
-            .splash-progress-bar {
-                height: 100%;
-                background: linear-gradient(90deg, #4f7cff, #22c55e);
-                border-radius: 1px;
-                animation: progress-load 5s ease-in-out forwards;
-                box-shadow: 0 0 10px rgba(79, 124, 255, 0.5);
-            }
-            
-            @keyframes progress-load {
-                0% { width: 0%; }
-                100% { width: 100%; }
-            }
-            
-            @keyframes fade-in {
-                from {
-                    opacity: 0;
-                    transform: translateY(20px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateY(0);
-                }
-            }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        col_l, col_c, col_r = st.columns([1, 2, 1])
-        with col_c:
-            st.markdown("""
-            <div class="splash-container">
-                <div class="splash-logo">
-                    <div class="splash-logo-icon">S</div>
-                </div>
-                <div class="splash-video-wrapper">
-            """, unsafe_allow_html=True)
-            
-            video_file = open('splash_video.mp4', 'rb')
-            st.video(video_file)
-            
-            st.markdown("""
-                </div>
-                <div class="splash-text">
-                    <h1>SLotX</h1>
-                    <p>Smart Parking System</p>
-                </div>
-                <div class="splash-progress">
-                    <div class="splash-progress-bar"></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Auto-redirect after 5 seconds
-        time.sleep(0.5)
-        st.rerun()
+def _video_base64(path):
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        return None
+
+
+def _image_base64(path):
+    try:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        return ""
+
+
+def intro_page():
+    """Full-screen splash video. Clicking Enter App opens the auth page."""
+    st.markdown("""
+    <style>
+    .block-container {padding:0 !important; max-width:100% !important;}
+    [data-testid="stHeader"], footer {display:none !important;}
+    .intro-shell{position:fixed; inset:0; overflow:hidden; background:#020712;}
+    .intro-video{position:absolute; inset:0; width:100vw; height:100vh; object-fit:contain; background:#020712;}
+    .intro-overlay{position:absolute; inset:0; background:linear-gradient(90deg,rgba(2,7,18,.72),rgba(2,7,18,.18),rgba(2,7,18,.72));}
+    .intro-content{position:fixed; z-index:2; inset:0; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px;}
+    .intro-badge{padding:8px 18px; border-radius:999px; background:rgba(0,229,184,.12); border:1px solid rgba(0,229,184,.32); color:#00E5B8; font-weight:800; letter-spacing:.10em; font-size:12px; text-transform:uppercase;}
+    .intro-title{font-family:'Syne',sans-serif; font-size:70px; line-height:1.05; font-weight:900; color:white; margin:18px 0 12px; letter-spacing:-.05em;}
+    .intro-title span{color:#00E5B8;}
+    .intro-sub{color:#B8C7D9; font-size:18px; max-width:720px; line-height:1.7; margin-bottom:32px;}
+    /* Center only one Enter App button over the video */
+    .stButton{position:fixed !important; left:50% !important; top:85% !important; transform:translateX(-50%) !important; z-index:10 !important; width:230px !important;}
+    .stButton>button{height:56px !important; border-radius:999px !important; font-weight:900 !important; font-size:17px !important; border:1px solid rgba(0,229,184,.45) !important; background:linear-gradient(135deg,#00E5B8,#38C8F8) !important; color:#020712 !important; box-shadow:0 12px 40px rgba(0,229,184,.34) !important;}
+    @media (max-width: 768px){
+        .intro-title{font-size:48px;}
+        .intro-sub{font-size:15px;}
+        .stButton{top:72% !important; width:210px !important;}
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    v64 = _video_base64(SPLASH_VIDEO_PATH)
+    if v64:
+        video_html = f'<video class="intro-video" autoplay muted loop playsinline><source src="data:video/mp4;base64,{v64}" type="video/mp4"></video>'
     else:
-        # Mark splash as shown and redirect to login
-        st.session_state.splash_shown = True
-        st.session_state.splash_start_time = None
+        video_html = '<div class="intro-video" style="background:radial-gradient(circle at center,rgba(0,229,184,.18),transparent 45%),linear-gradient(135deg,#020712,#071827);"></div>'
+
+    st.markdown(f"""
+    <div class="intro-shell">
+        {video_html}
+        <div class="intro-overlay"></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("🚀 Enter App", key="intro_enter_app", use_container_width=True):
+        st.session_state.intro_done = True
+        st.session_state.auth_mode = "login"
         st.rerun()
 
+
+if not st.session_state.intro_done:
+    intro_page()
+    st.stop()
+    
 # ── Router ───────────────────────────────────
 if st.session_state.logged_in:
     if st.session_state.role == "admin":
