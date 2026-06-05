@@ -227,6 +227,43 @@ def authenticate(username: str, password: str):
     return dict(row) if row else None
 
 
+def register_user(username: str, password: str, full_name: str, email: str, phone: str):
+    """Register a new user. Returns (ok, message)."""
+    # Validate inputs
+    if not username or not username.strip():
+        return False, "Username cannot be empty."
+    if not password or not password.strip():
+        return False, "Password cannot be empty."
+    if not full_name or not full_name.strip():
+        return False, "Full name cannot be empty."
+    
+    username = username.strip()
+    
+    # Check if username already exists
+    conn = get_conn()
+    existing = conn.execute(
+        "SELECT 1 FROM users WHERE username=?",
+        (username,)
+    ).fetchone()
+    
+    if existing:
+        conn.close()
+        return False, f"Username '{username}' is already taken."
+    
+    # Insert new user with role='user'
+    try:
+        conn.execute(
+            "INSERT INTO users (username, password, name, email, phone, role) VALUES (?,?,?,?,?,?)",
+            (username, hash_password(password), full_name, email or None, phone or None, "user"),
+        )
+        conn.commit()
+        conn.close()
+        return True, f"Account created successfully! You can now sign in."
+    except Exception as e:
+        conn.close()
+        return False, f"Error creating account: {str(e)}"
+
+
 def get_user(user_id: int):
     """Get user by ID."""
     conn = get_conn()
