@@ -111,103 +111,54 @@ def _render_footer():
 
 # ─────────────────────────────────────────────
 def render_admin():
+    # Force dark mode as default
+    st.session_state.dark = True
     st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
 
     BASE_DIR = Path(__file__).resolve().parents[1]
     LOGO_PATH = BASE_DIR / "slotx_logo.jpeg"
 
-    # Hide sidebar and expand content to full width (admin console only)
+    # Clean styling - hide Streamlit chrome, full width content (matching user UI)
     st.markdown("""
     <style>
+    /* Hide Streamlit native sidebar and top header/toolbar */
     [data-testid="stSidebar"],
     [data-testid="stSidebarNav"],
     .sidebar { display: none !important; width: 0 !important; }
+    [data-testid="stHeader"] { display: none !important; }
+    [data-testid="stToolbar"] { display: none !important; }
+    footer { display: none !important; }
+
+    /* Expand main content area to full width */
     [data-testid="stMainBlockContainer"],
     .main { width: 100% !important; max-width: 100% !important; }
-    .stAppViewContainer { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
+    .stAppViewContainer { max-width: 100% !important; }
+    [data-testid="stAppViewBlockContainer"],
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        padding-top: 1rem !important;
+        margin-left: 0 !important;
+        max-width: 100% !important;
+    }
     [data-testid="stContainer"] { width: 100% !important; }
     .element-container { width: 100% !important; }
-
-    /* Left Panel Styling */
-    .left-panel {
-        position: fixed;
-        left: 0;
-        top: 0;
-        width: 100px;
-        height: 100vh;
-        background: linear-gradient(180deg, #0b0c0f 0%, #111318 50%, #0b0c0f 100%);
-        border-right: 1px solid #2a2f3d;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        padding: 20px 0;
-        gap: 30px;
-        z-index: 999;
-    }
-    .left-panel-logo {
-        width: 75px;
-        height: 75px;
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 4px 12px rgba(79, 124, 255, 0.3);
-        flex-shrink: 0;
-    }
-    .left-panel-logo img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
     </style>
     """, unsafe_allow_html=True)
 
-    # Left panel with logo and dark mode toggle (fixed position)
-    dark_mode = st.session_state.dark
-    dark_label = f"{'🌙' if dark_mode else '☀️'}"
+    # ── Top Bar: Navigation Buttons (single row) + Sign Out ────
+    top_bar_cols = st.columns([9, 1])
 
-    st.markdown(f"""
-    <div class="left-panel">
-        <div class="left-panel-logo">
-            <img src="file:///{LOGO_PATH}" alt="SLotX" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px;">
-        </div>
-        <button id="dark-mode-btn" style="position: fixed; left: 20px; top: 130px; width: 60px; height: 60px; background: linear-gradient(135deg, #4f7cff, #22c55e); border-radius: 50%; border: none; cursor: pointer; font-size: 24px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); z-index: 999; transition: transform 0.2s ease;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-            {dark_label}
-        </button>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Display logo using Streamlit (for actual rendering)
-    if LOGO_PATH.exists():
-        st.markdown(f"""
-        <div style="position: absolute; top: -9999px; left: -9999px; width: 75px; height: 75px;">
-        """, unsafe_allow_html=True)
-        st.image(str(LOGO_PATH), width=75)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # Dark mode toggle button (invisible, positioned off-screen)
-    st.markdown('<div style="position: absolute; top: -9999px; left: -9999px;">', unsafe_allow_html=True)
-    if st.button(dark_label, key="left_dark_toggle_admin"):
-        st.session_state.dark = not st.session_state.dark
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ── Top Bar: Navigation Buttons + Sign Out ────
-    top_bar_cols = st.columns([5.8, 0.7])
-
-    # Left: Navigation buttons (split into two rows due to space)
+    # Left: All navigation buttons in single row
     with top_bar_cols[0]:
-        nav_row1 = st.columns(5, gap="small")
-        nav_row2 = st.columns(4, gap="small")
+        nav_buttons = st.columns(9, gap="small")
 
-        nav_items_1 = [
+        nav_items = [
             ("📊 Dashboard", "dashboard"),
             ("🅿️ Slots", "slots"),
             ("📁 Media", "media"),
             ("📋 Bookings", "bookings"),
             ("💰 Rates", "rates"),
-        ]
-
-        nav_items_2 = [
             ("📈 Analytics", "analytics"),
             ("🚗 Entry/Exit", "entry_exit"),
             ("⚠️ Overstay", "overstay"),
@@ -218,15 +169,8 @@ def render_admin():
         if "admin_current_page" not in st.session_state:
             st.session_state.admin_current_page = "dashboard"
 
-        # First row of nav buttons
-        for col, (label, page_key) in zip(nav_row1, nav_items_1):
-            with col:
-                if st.button(label, use_container_width=True, key=f"nav_{page_key}"):
-                    st.session_state.admin_current_page = page_key
-                    st.rerun()
-
-        # Second row of nav buttons
-        for col, (label, page_key) in zip(nav_row2, nav_items_2):
+        # All navigation buttons in one row
+        for col, (label, page_key) in zip(nav_buttons, nav_items):
             with col:
                 if st.button(label, use_container_width=True, key=f"nav_{page_key}"):
                     st.session_state.admin_current_page = page_key
