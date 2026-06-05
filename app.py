@@ -10,7 +10,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 import base64
 
-from utils.database import init_db, authenticate
+from utils.database import init_db, authenticate, register_user
 from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS
 
 st.set_page_config(
@@ -110,7 +110,7 @@ def intro_page():
     </div>
     """, unsafe_allow_html=True)
 
-    if st.button("🚀 Enter App", key="intro_enter_app", use_container_width=True):
+    if st.button("🚗 Park Your Vehicle", key="intro_enter_app", use_container_width=True):
         st.session_state.intro_done = True
         st.session_state.auth_mode = "login"
         st.rerun()
@@ -148,12 +148,6 @@ else:
           <div style='font-size:14px;color:#b9fff8;letter-spacing:1.5px;margin-top:6px'>Smart Parking. Smarter Future.</div>
         </div>
         """, unsafe_allow_html=True)
-
-        # Theme toggle
-        dark_toggle = st.toggle("Dark mode", value=st.session_state.dark, key="login_theme")
-        if dark_toggle != st.session_state.dark:
-            st.session_state.dark = dark_toggle
-            st.rerun()
 
         st.divider()
 
@@ -331,7 +325,3 @@ else:
             """, unsafe_allow_html=True)
         
         st.divider()
-        dark = st.toggle("Dark mode", value=st.session_state.dark, key="login_sidebar_theme")
-        if dark != st.session_state.dark:
-            st.session_state.dark = dark
-            st.rerun()
