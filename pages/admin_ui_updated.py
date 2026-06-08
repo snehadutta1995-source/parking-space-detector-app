@@ -21,7 +21,7 @@ from utils.database import (
     get_entry_exit_logs, get_overstay_alerts, resolve_overstay_alert, log_entry_by_ref, log_exit_by_ref,
     get_waitlist, remove_from_waitlist,
 )
-from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS
+from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS, section_header_html, card_html
 
 if not hasattr(st, "experimental_dialog") and hasattr(st, "dialog"):
     st.experimental_dialog = st.dialog
@@ -82,7 +82,7 @@ def _render_footer():
     """Render the admin footer section."""
     st.markdown("---")
     st.markdown("""
-    <div style='padding: 20px 0; color: #9aa0b4; font-size: 13px;'>
+    <div style='padding: 20px 0; color: var(--text2); font-size: 13px;'>
     """, unsafe_allow_html=True)
 
     # Footer Navigation
@@ -106,14 +106,12 @@ def _render_footer():
         st.markdown("<div style='opacity:0;cursor:default;'><button style='width:100%;'>Placeholder</button></div>", unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("<div style='text-align: center; padding-top: 10px; color: #6b7280; font-size: 11px;'>© 2026 SLotX — Smart Parking Solutions. All rights reserved.</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; padding-top: 10px; color: var(--text2); font-size: 11px;'>© 2026 SLotX — Smart Parking Solutions. All rights reserved.</div>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
 def render_admin():
-    # Force dark mode as default
-    st.session_state.dark = True
-    st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
+    st.markdown(apply_theme(), unsafe_allow_html=True)
 
     BASE_DIR = Path(__file__).resolve().parents[1]
     LOGO_PATH = BASE_DIR / "slotx_logo.jpeg"
@@ -135,14 +133,39 @@ def render_admin():
     .stAppViewContainer { max-width: 100% !important; }
     [data-testid="stAppViewBlockContainer"],
     .block-container {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-left: 1.25rem !important;
+        padding-right: 1.25rem !important;
         padding-top: 1rem !important;
         margin-left: 0 !important;
         max-width: 100% !important;
     }
     [data-testid="stContainer"] { width: 100% !important; }
     .element-container { width: 100% !important; }
+
+    /* ── NAV BUTTON POLISH ── */
+    .stButton > button {
+        font-size: 13px !important;
+        letter-spacing: 0.01em !important;
+    }
+
+    /* ── DIVIDER FADE-IN ── */
+    hr { animation: fadeIn 0.6s ease-out !important; }
+
+    /* ── TABLE ROWS HOVER ── */
+    [data-testid="stDataFrame"] tbody tr:hover {
+        background: rgba(79,124,255,0.06) !important;
+    }
+
+    /* ── EXPANDER ANIMATION ── */
+    .streamlit-expanderContent {
+        animation: slideUp 0.3s ease-out;
+    }
+
+    /* ── STAGGERED METRIC ANIMATION ── */
+    [data-testid="stMetric"]:nth-child(1) { animation-delay: 0.05s; }
+    [data-testid="stMetric"]:nth-child(2) { animation-delay: 0.10s; }
+    [data-testid="stMetric"]:nth-child(3) { animation-delay: 0.15s; }
+    [data-testid="stMetric"]:nth-child(4) { animation-delay: 0.20s; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -208,16 +231,7 @@ def render_admin():
 # DASHBOARD
 # ─────────────────────────────────────────────
 def _dashboard():
-    st.markdown("""
-    <div style='display:flex;align-items:center;gap:12px;margin-bottom:1.5rem'>
-      <div style='width:40px;height:40px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:10px;
-                  display:flex;align-items:center;justify-content:center;font-size:20px'>📊</div>
-      <div>
-        <h1 style='margin:0;font-family:Syne,sans-serif'>Dashboard</h1>
-        <div style='font-size:13px;color:#9aa0b4'>Real-time parking management overview</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(section_header_html("📊", "Dashboard", "Real-time parking management overview"), unsafe_allow_html=True)
     
     stats = get_analytics()
 
@@ -256,20 +270,21 @@ def _dashboard():
         hours  = ["6am","7am","8am","9am","10am","11am","12pm","1pm"]
         values = [35, 62, 88, 100, 92, 74, 58, 67]
         fig, ax = plt.subplots(figsize=(6, 3.5))
-        bg = "#111318" if st.session_state.dark else "#ffffff"
-        fg = "#e8eaf0" if st.session_state.dark else "#1a1d27"
-        fig.patch.set_facecolor(bg)
-        ax.set_facecolor(bg)
+        # Use neutral chart colors that work in both light and dark
+        fig.patch.set_facecolor("none")
+        ax.set_facecolor("none")
         bar_colors = ["#ef4444" if v > 85 else "#f59e0b" if v > 60 else "#4f7cff" for v in values]
         ax.bar(hours, values, color=bar_colors, edgecolor="none", width=0.65)
         ax.set_ylim(0, 115)
-        ax.tick_params(colors=fg, labelsize=9)
+        label_color = "#333333"
+        ax.tick_params(colors=label_color, labelsize=9)
         for spine in ax.spines.values():
             spine.set_visible(False)
         ax.yaxis.set_visible(False)
         for i, v in enumerate(values):
-            ax.text(i, v + 2, f"{v}%", ha="center", va="bottom", fontsize=8, color=fg)
-        ax.set_title("Occupancy % by Hour", color=fg, fontsize=11, pad=8)
+            ax.text(i, v + 2, f"{v}%", ha="center", va="bottom", fontsize=8, color=label_color)
+        ax.set_title("Occupancy % by Hour", color=label_color, fontsize=11, pad=8)
+        plt.tight_layout()
         st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
@@ -289,16 +304,7 @@ def _dashboard():
 # SLOTS MANAGEMENT
 # ─────────────────────────────────────────────
 def _slots_page():
-    st.markdown("""
-    <div style='display:flex;align-items:center;gap:12px;margin-bottom:1.5rem'>
-      <div style='width:40px;height:40px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:10px;
-                  display:flex;align-items:center;justify-content:center;font-size:20px'>🅿️</div>
-      <div>
-        <h1 style='margin:0;font-family:Syne,sans-serif'>Parking Slots</h1>
-        <div style='font-size:13px;color:#9aa0b4'>Manage all parking slots and floor layouts</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(section_header_html("🅿️", "Parking Slots", "Manage all parking slots and floor layouts"), unsafe_allow_html=True)
 
     tab_view, tab_map, tab_add, tab_manage = st.tabs(["🎨 Grid", "🗺️ Floor Map", "➕ Add", "✏️ Edit"])
 
@@ -339,7 +345,7 @@ def _slots_page():
             occ_f = len(fslots) - vac_f
             
             st.markdown(f"""
-            <div style='background:#181b22;border:1px solid #2a2f3d;border-radius:12px;padding:1.5rem;margin-bottom:1.5rem'>
+            <div style='background:var(--bg3);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:var(--card-shadow)'>
               <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem'>
                 <div style='font-family:Syne;font-weight:800;font-size:20px'>Floor {floor}</div>
                 <div style='display:flex;gap:2rem;font-size:14px'>
