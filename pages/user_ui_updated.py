@@ -21,7 +21,7 @@ from utils.database import (
     get_entry_exit_logs, get_overstay_alerts,
     send_notification, mark_notification_read,
 )
-from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS
+from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS, section_header_html, card_html
 
 if not hasattr(st, "experimental_dialog") and hasattr(st, "dialog"):
     st.experimental_dialog = st.dialog
@@ -169,7 +169,7 @@ def _render_footer(user):
     """Render the footer section with navigation and info links."""
     st.markdown("---")
     st.markdown("""
-    <div style='padding: 20px 0; color: #9aa0b4; font-size: 13px;'>
+    <div style='padding: 20px 0; color: var(--text2); font-size: 13px;'>
     """, unsafe_allow_html=True)
 
     # Footer Navigation
@@ -196,12 +196,12 @@ def _render_footer(user):
             _footer_terms_dialog()
 
     st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("<div style='text-align: center; padding-top: 10px; color: #6b7280; font-size: 11px;'>© 2026 SLotX — Smart Parking Solutions. All rights reserved.</div>", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; padding-top: 10px; color: var(--text2); font-size: 11px;'>© 2026 SLotX — Smart Parking Solutions. All rights reserved.</div>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
 def render_user():
-    st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
+    st.markdown(apply_theme(), unsafe_allow_html=True)
 
     BASE_DIR = Path(__file__).resolve().parents[1]
     LOGO_PATH = BASE_DIR / "slotx_logo.jpeg"
@@ -223,14 +223,39 @@ def render_user():
     .stAppViewContainer { max-width: 100% !important; }
     [data-testid="stAppViewBlockContainer"],
     .block-container {
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-left: 1.25rem !important;
+        padding-right: 1.25rem !important;
         padding-top: 1rem !important;
         margin-left: 0 !important;
         max-width: 100% !important;
     }
     [data-testid="stContainer"] { width: 100% !important; }
     .element-container { width: 100% !important; }
+
+    /* ── NAV BUTTON POLISH ── */
+    .stButton > button {
+        font-size: 13px !important;
+        letter-spacing: 0.01em !important;
+    }
+
+    /* ── DIVIDER FADE-IN ── */
+    hr { animation: fadeIn 0.6s ease-out !important; }
+
+    /* ── EXPANDER ANIMATION ── */
+    .streamlit-expanderContent {
+        animation: slideUp 0.3s ease-out;
+    }
+
+    /* ── TABLE ROWS HOVER ── */
+    [data-testid="stDataFrame"] tbody tr:hover {
+        background: rgba(79,124,255,0.06) !important;
+    }
+
+    /* ── STAGGERED METRIC ANIMATION ── */
+    [data-testid="stMetric"]:nth-child(1) { animation-delay: 0.05s; }
+    [data-testid="stMetric"]:nth-child(2) { animation-delay: 0.10s; }
+    [data-testid="stMetric"]:nth-child(3) { animation-delay: 0.15s; }
+    [data-testid="stMetric"]:nth-child(4) { animation-delay: 0.20s; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -305,16 +330,7 @@ def render_user():
 # SLOT AVAILABILITY WITH ANIMATED GRID
 # ─────────────────────────────────────────────
 def _availability():
-    st.markdown("""
-    <div style='display:flex;align-items:center;gap:12px;margin-bottom:1.5rem'>
-      <div style='width:40px;height:40px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:10px;
-                  display:flex;align-items:center;justify-content:center;font-size:20px'>🗺️</div>
-      <div>
-        <h1 style='margin:0;font-family:Syne,sans-serif'>Parking Availability</h1>
-        <div style='font-size:13px;color:#9aa0b4'>Real-time slot status and live updates</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(section_header_html("🗺️", "Parking Availability", "Real-time slot status and live updates"), unsafe_allow_html=True)
 
     slots = get_all_slots()
     vac   = sum(1 for s in slots if s["status"] == "vacant")
@@ -342,7 +358,7 @@ def _availability():
 
     st.divider()
     st.markdown(
-        "<div style='display:flex;gap:16px;font-size:12px;color:#9aa0b4;margin-bottom:12px'>"
+        "<div style='display:flex;gap:16px;font-size:12px;color:var(--text2);margin-bottom:12px'>"
         "<span>🟢 <b>Vacant (Free)</b></span>"
         "<span>🔴 <b>Occupied (Taken)</b></span></div>",
         unsafe_allow_html=True,
@@ -368,16 +384,7 @@ def _availability():
 # PRE-BOOKING WITH DATE PICKER
 # ─────────────────────────────────────────────
 def _pre_book():
-    st.markdown("""
-    <div style='display:flex;align-items:center;gap:12px;margin-bottom:1.5rem'>
-      <div style='width:40px;height:40px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:10px;
-                  display:flex;align-items:center;justify-content:center;font-size:20px'>📅</div>
-      <div>
-        <h1 style='margin:0;font-family:Syne,sans-serif'>Pre-Book a Slot</h1>
-        <div style='font-size:13px;color:#9aa0b4'>Reserve your parking in advance</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(section_header_html('📅', 'Pre-Book a Slot', 'Reserve your parking in advance'), unsafe_allow_html=True)
 
     rates = get_rates()
     slots = get_all_slots()
@@ -464,30 +471,30 @@ def _pre_book():
             date_str = booking_date.strftime("%d %b %Y") if 'booking_date' in dir() else "—"
 
             st.markdown(f"""
-            <div style='background:#111318;border:1px solid #2a2f3d;border-radius:12px;padding:1.5rem'>
-              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2a2f3d'>
-                <span style='color:#9aa0b4;font-size:13px'>Date</span>
+            <div style='background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:1.5rem;box-shadow:var(--card-shadow)'>
+              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)'>
+                <span style='color:var(--text2);font-size:13px'>Date</span>
                 <span style='font-weight:500'>{date_str}</span>
               </div>
-              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2a2f3d'>
-                <span style='color:#9aa0b4;font-size:13px'>Vehicle</span>
+              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)'>
+                <span style='color:var(--text2);font-size:13px'>Vehicle</span>
                 <span style='font-weight:500'>{vtype if 'vtype' in dir() else '—'}</span>
               </div>
-              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2a2f3d'>
-                <span style='color:#9aa0b4;font-size:13px'>Rate</span>
-                <span style='color:#f59e0b;font-weight:500'>₹{rate_now}/hr</span>
+              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)'>
+                <span style='color:var(--text2);font-size:13px'>Rate</span>
+                <span style='color:var(--amber);font-weight:500'>₹{rate_now}/hr</span>
               </div>
-              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2a2f3d'>
-                <span style='color:#9aa0b4;font-size:13px'>Duration</span>
+              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)'>
+                <span style='color:var(--text2);font-size:13px'>Duration</span>
                 <span style='font-weight:500'>{dur_now} hr(s)</span>
               </div>
-              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2a2f3d'>
-                <span style='color:#9aa0b4;font-size:13px'>Slot</span>
-                <span style='font-family:DM Mono,monospace;color:#4f7cff;font-weight:600'>{sl_now}</span>
+              <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)'>
+                <span style='color:var(--text2);font-size:13px'>Slot</span>
+                <span style='font-family:DM Mono,monospace;color:var(--accent);font-weight:600'>{sl_now}</span>
               </div>
               <div style='display:flex;justify-content:space-between;align-items:center;padding-top:14px'>
                 <span style='font-family:Syne,sans-serif;font-weight:700;font-size:15px'>Total</span>
-                <span style='font-family:Syne,sans-serif;font-size:32px;font-weight:800;color:#f59e0b'>₹{amt_now}</span>
+                <span style='font-family:Syne,sans-serif;font-size:32px;font-weight:800;color:var(--amber)'>₹{amt_now}</span>
               </div>
             </div>
             """, unsafe_allow_html=True)
@@ -539,16 +546,7 @@ def _pre_book():
 # MY BOOKINGS
 # ─────────────────────────────────────────────
 def _my_bookings():
-    st.markdown("""
-    <div style='display:flex;align-items:center;gap:12px;margin-bottom:1.5rem'>
-      <div style='width:40px;height:40px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:10px;
-                  display:flex;align-items:center;justify-content:center;font-size:20px'>📋</div>
-      <div>
-        <h1 style='margin:0;font-family:Syne,sans-serif'>My Bookings</h1>
-        <div style='font-size:13px;color:#9aa0b4'>Your parking reservations</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(section_header_html('📋', 'My Bookings', 'Your parking reservations'), unsafe_allow_html=True)
 
     bookings = get_user_bookings(st.session_state.user["id"])
 
@@ -611,7 +609,7 @@ def _qr_dialog(b):
     st.markdown(
         f"<div style='text-align:center;font-family:Syne,sans-serif;font-weight:700;"
         f"font-size:18px;margin-bottom:4px'>{b['booking_ref']}</div>"
-        f"<div style='text-align:center;color:#9aa0b4;font-size:13px;margin-bottom:12px'>"
+        f"<div style='text-align:center;color:var(--text2);font-size:13px;margin-bottom:12px'>"
         f"Slot {b['slot_code']} · {b['vehicle_no']}</div>",
         unsafe_allow_html=True,
     )
@@ -699,9 +697,9 @@ def _display_bookings_grid(bookings, cols_per_row: int = 3):
             with col:
                 with st.container(border=True):
                     st.markdown(
-                        f"<div style='font-family:Syne,sans-serif;font-weight:700;font-size:15px'>"
+                        f"<div style='font-family:Syne,sans-serif;font-weight:700;font-size:15px;color:var(--text)'>"
                         f"🟢 {b['booking_ref']}</div>"
-                        f"<div style='color:#9aa0b4;font-size:12px;margin-bottom:8px'>"
+                        f"<div style='color:var(--text2);font-size:12px;margin-bottom:8px'>"
                         f"Slot {b['slot_code']} · Floor {b['floor']}</div>",
                         unsafe_allow_html=True,
                     )
@@ -753,16 +751,7 @@ def _display_pending_bookings(bookings):
 # RATES VIEW
 # ─────────────────────────────────────────────
 def _rates_view():
-    st.markdown("""
-    <div style='display:flex;align-items:center;gap:12px;margin-bottom:1.5rem'>
-      <div style='width:40px;height:40px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:10px;
-                  display:flex;align-items:center;justify-content:center;font-size:20px'>💰</div>
-      <div>
-        <h1 style='margin:0;font-family:Syne,sans-serif'>Parking Rates</h1>
-        <div style='font-size:13px;color:#9aa0b4'>Pricing and fare information</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(section_header_html('💰', 'Parking Rates', 'Pricing and fare information'), unsafe_allow_html=True)
 
     rates = get_rates()
     st.markdown(rate_card_html(rates), unsafe_allow_html=True)
@@ -772,16 +761,7 @@ def _rates_view():
 # USER PROFILE PAGE
 # ─────────────────────────────────────────────
 def _profile_page():
-    st.markdown("""
-    <div style='display:flex;align-items:center;gap:12px;margin-bottom:1.5rem'>
-      <div style='width:40px;height:40px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:10px;
-                  display:flex;align-items:center;justify-content:center;font-size:20px'>👤</div>
-      <div>
-        <h1 style='margin:0;font-family:Syne,sans-serif'>Your Profile</h1>
-        <div style='font-size:13px;color:#9aa0b4'>Manage your account settings</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(section_header_html('👤', 'Your Profile', 'Manage your account settings'), unsafe_allow_html=True)
     
     user = get_user(st.session_state.user["id"])
     if not user:
