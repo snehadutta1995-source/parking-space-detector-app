@@ -83,7 +83,7 @@ def verify_card_details(card_type, cardholder, card_number, expiry, cvv):
 # ─────────────────────────────────────────────
 def render_payment(booking_ref: str = None):
     """Main payment gateway page. booking_ref falls back to session state."""
-    st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
+    st.markdown(apply_theme(), unsafe_allow_html=True)
 
     if booking_ref is None:
         booking_ref = st.session_state.get("pay_booking_ref")
@@ -124,7 +124,7 @@ def render_payment(booking_ref: str = None):
                   display:flex;align-items:center;justify-content:center;font-size:20px'>💳</div>
       <div>
         <h1 style='margin:0;font-family:Syne,sans-serif'>Secure Payment</h1>
-        <div style='font-size:13px;color:#9aa0b4'>Complete your parking booking payment</div>
+        <div style='font-size:13px;color:var(--text2)'>Complete your parking booking payment</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -151,14 +151,14 @@ def render_payment(booking_ref: str = None):
     with col2:
         st.markdown("### Amount Due")
         st.markdown(f"""
-        <div style='background:#1e222c;border-radius:8px;padding:16px;border:1px solid #2a2f3d'>
-            <div style='font-size:13px;color:#9aa0b4;margin-bottom:8px'>
+        <div style='background:var(--bg3);border-radius:10px;padding:16px;border:1px solid var(--border)'>
+            <div style='font-size:13px;color:var(--text2);margin-bottom:8px'>
                 <div style='display:flex;justify-content:space-between;padding:4px 0'>
                     <span>Base Amount</span>
                     <span>₹{booking['amount']:.2f}</span>
                 </div>
             </div>
-            <div style='border-top:1px solid #2a2f3d;padding-top:8px;margin-top:8px'>
+            <div style='border-top:1px solid var(--border);padding-top:8px;margin-top:8px'>
                 <div style='display:flex;justify-content:space-between;padding:4px 0;font-size:16px;font-weight:700'>
                     <span>Total</span>
                     <span style='color:#22c55e'>₹{booking['amount']:.2f}</span>
@@ -287,7 +287,7 @@ def _process_card_payment(booking, cardholder, card_last4, card_type):
             st.markdown(f"""
             <div style='background:#1e222c;border-radius:8px;padding:16px;margin-top:1rem;border:1px solid #22c55e'>
                 <div style='color:#22c55e;font-weight:700;margin-bottom:8px'>Payment Confirmed</div>
-                <div style='font-size:13px;color:#9aa0b4;line-height:1.6'>
+                <div style='font-size:13px;color:var(--text2);line-height:1.6'>
                     <div>✅ Booking Reference: <code>{booking["booking_ref"]}</code></div>
                     <div>✅ Paid via: {card_type} (****{card_last4})</div>
                     <div>✅ Amount: ₹{booking["amount"]:.2f}</div>
