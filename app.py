@@ -44,7 +44,7 @@ for k, v in defaults.items():
         st.session_state[k] = v
 
 # ── Theme ────────────────────────────────────
-st.markdown(apply_theme(st.session_state.dark), unsafe_allow_html=True)
+st.markdown(apply_theme(), unsafe_allow_html=True)
 
 # ── Splash screen ────────────────────────────
 # Initialize session state variables
@@ -225,7 +225,7 @@ else:
                       font-family:Syne,sans-serif;font-weight:800;font-size:18px;color:#fff'>S</div>
           <div>
             <div style='font-family:Syne,sans-serif;font-size:15px;font-weight:700'>SLotX</div>
-            <div style='font-size:11px;color:#9aa0b4'>Smart Parking</div>
+            <div style='font-size:11px;color:var(--text2)'>Smart Parking</div>
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -244,22 +244,22 @@ else:
             st.markdown("### 👥 Meet Our Team")
             
             st.markdown("""
-            <div style='background:#111318;border:1px solid #2a2f3d;border-radius:12px;padding:1.5rem;margin:1rem 0'>
+            <div style='background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin:1rem 0'>
               <div style='margin-bottom:1.5rem'>
-                <div style='font-weight:700;font-size:14px;color:#4f7cff'>👩‍💻 Sneha Dutta</div>
-                <div style='font-size:12px;color:#9aa0b4;margin-top:4px'>Code and Design Expert</div>
+                <div style='font-weight:700;font-size:14px;color:var(--accent)'>👩‍💻 Sneha Dutta</div>
+                <div style='font-size:12px;color:var(--text2);margin-top:4px'>Code and Design Expert</div>
                 <div style='font-size:11px;color:#5c6278;margin-top:8px'>Full-stack development, UI/UX design, and system architecture</div>
               </div>
               
               <div style='margin-bottom:1.5rem'>
-                <div style='font-weight:700;font-size:14px;color:#4f7cff'>👩‍💻 Sangita Malakar</div>
-                <div style='font-size:12px;color:#9aa0b4;margin-top:4px'>Code and Design Expert</div>
+                <div style='font-weight:700;font-size:14px;color:var(--accent)'>👩‍💻 Sangita Malakar</div>
+                <div style='font-size:12px;color:var(--text2);margin-top:4px'>Code and Design Expert</div>
                 <div style='font-size:11px;color:#5c6278;margin-top:8px'>Backend systems, database design, and code optimization</div>
               </div>
               
               <div>
-                <div style='font-weight:700;font-size:14px;color:#4f7cff'>👩‍🎨 Mousumi Haldar</div>
-                <div style='font-size:12px;color:#9aa0b4;margin-top:4px'>Design Expert</div>
+                <div style='font-weight:700;font-size:14px;color:var(--accent)'>👩‍🎨 Mousumi Haldar</div>
+                <div style='font-size:12px;color:var(--text2);margin-top:4px'>Design Expert</div>
                 <div style='font-size:11px;color:#5c6278;margin-top:8px'>User interface, visual design, and user experience optimization</div>
               </div>
             </div>
@@ -267,7 +267,7 @@ else:
             
             st.markdown("""
             <div style='background:rgba(79,124,255,.08);border:1px solid rgba(79,124,255,.25);
-                        border-radius:8px;padding:1.25rem;margin-top:1.5rem;font-size:13px;color:#4f7cff'>
+                        border-radius:8px;padding:1.25rem;margin-top:1.5rem;font-size:13px;color:var(--accent)'>
             <strong>✨ About SLotX</strong><br><br>
             SLotX is a next-generation smart parking management system designed to revolutionize urban parking. 
             Built with cutting-edge technology, our platform provides real-time slot availability, intelligent 
@@ -279,17 +279,17 @@ else:
             st.markdown("### 📞 Get In Touch")
             
             st.markdown("""
-            <div style='background:#111318;border:1px solid #2a2f3d;border-radius:12px;padding:1.5rem;margin:1rem 0'>
+            <div style='background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin:1rem 0'>
               
               <div style='margin-bottom:1.25rem'>
-                <div style='font-size:12px;color:#9aa0b4;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px'>📱 Phone Numbers</div>
-                <div style='font-size:14px;color:#e8eaf0;margin-bottom:8px;font-weight:500'>+91-8765-432-109</div>
-                <div style='font-size:14px;color:#e8eaf0;font-weight:500'>+91-9876-543-210</div>
+                <div style='font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px'>📱 Phone Numbers</div>
+                <div style='font-size:14px;color:var(--text);margin-bottom:8px;font-weight:500'>+91-8765-432-109</div>
+                <div style='font-size:14px;color:var(--text);font-weight:500'>+91-9876-543-210</div>
               </div>
               
-              <div style='border-top:1px solid #2a2f3d;padding-top:1.25rem'>
-                <div style='font-size:12px;color:#9aa0b4;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px'>✉️ Email</div>
-                <div style='font-size:14px;color:#4f7cff;word-break:break-all;font-weight:500'>
+              <div style='border-top:1px solid var(--border);padding-top:1.25rem'>
+                <div style='font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px'>✉️ Email</div>
+                <div style='font-size:14px;color:var(--accent);word-break:break-all;font-weight:500'>
                   support@slotx.in
                 </div>
               </div>
