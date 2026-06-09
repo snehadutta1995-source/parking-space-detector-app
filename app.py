@@ -46,6 +46,15 @@ for k, v in defaults.items():
 # ── Theme ────────────────────────────────────
 st.markdown(apply_theme(), unsafe_allow_html=True)
 
+# ── XARA Floating Chatbot ─────────────────────
+import streamlit.components.v1 as components
+from utils.chatbot_utils import create_chatbot, get_xara_floating_widget
+components.html(get_xara_floating_widget(), height=0, scrolling=False)
+if "xara_messages" not in st.session_state:
+    st.session_state.xara_messages = []
+if "xara_instance" not in st.session_state:
+    st.session_state.xara_instance = create_chatbot()
+
 # ── Splash screen ────────────────────────────
 # Initialize session state variables
 # ── Splash screen / Intro page ────────────────────────────
@@ -272,6 +281,13 @@ else:
             SLotX is a next-generation smart parking management system designed to revolutionize urban parking. 
             Built with cutting-edge technology, our platform provides real-time slot availability, intelligent 
             booking, advanced analytics, and seamless entry/exit management.
+            </div>
+            
+            <div style='background:linear-gradient(135deg,rgba(0,229,184,.12),rgba(79,124,255,.1));
+                        border:1px solid rgba(0,229,184,.35);
+                        border-radius:8px;padding:1.25rem;margin-top:1rem;font-size:13px;
+                        color:#00E5B8;text-align:center;line-height:1.6'>
+            🤖 <strong>Meet XARA</strong> — the intelligent assistant that makes parking effortless with SlotX.
             </div>
             """, unsafe_allow_html=True)
         
