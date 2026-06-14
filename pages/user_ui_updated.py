@@ -4,6 +4,7 @@ Smart Parking Booking and Management for Customers
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime, time, timedelta
 import qrcode
@@ -549,6 +550,7 @@ def _my_bookings():
     st.markdown(section_header_html('📋', 'My Bookings', 'Your parking reservations'), unsafe_allow_html=True)
 
     bookings = get_user_bookings(st.session_state.user["id"])
+    scroll_booking_ref = st.session_state.get("scroll_to_booking_ref")
 
     if not bookings:
         st.info("No bookings yet. Start by booking a slot!")
@@ -566,7 +568,7 @@ def _my_bookings():
         if not active_bookings:
             st.info("No active bookings")
         else:
-            _display_bookings_grid(active_bookings)
+            _display_bookings_grid(active_bookings, highlight_ref=scroll_booking_ref)
 
     with tab_pending:
         pending_bookings = [b for b in bookings if b["status"] == "pending"]
@@ -680,7 +682,7 @@ def _display_bookings_list(bookings):
                     _render_active_qr(b, key_prefix="list")
 
 
-def _display_bookings_grid(bookings, cols_per_row: int = 3):
+def _display_bookings_grid(bookings, cols_per_row: int = 3, highlight_ref: str = None):
     """Display active bookings as a grid of cards."""
     spent = sum(b["amount"] for b in bookings)
 
@@ -695,6 +697,23 @@ def _display_bookings_grid(bookings, cols_per_row: int = 3):
         cols = st.columns(cols_per_row)
         for col, b in zip(cols, row):
             with col:
+                if highlight_ref == b["booking_ref"]:
+                    target_id = f"recent-booking-{b['booking_ref']}"
+                    st.markdown(
+                        f"<div id='{target_id}' style='scroll-margin-top:90px'></div>",
+                        unsafe_allow_html=True,
+                    )
+                    components.html(f"""
+                    <script>
+                    setTimeout(function() {{
+                        var target = window.parent.document.getElementById("{target_id}");
+                        if (target) {{
+                            target.scrollIntoView({{ behavior: "smooth", block: "start" }});
+                        }}
+                    }}, 450);
+                    </script>
+                    """, height=0)
+
                 with st.container(border=True):
                     st.markdown(
                         f"<div style='font-family:Syne,sans-serif;font-weight:700;font-size:15px;color:var(--text)'>"
@@ -713,6 +732,9 @@ def _display_bookings_grid(bookings, cols_per_row: int = 3):
 
                     if st.button("📱 Click to Generate QR", key=f"qr_btn_{b['id']}", use_container_width=True):
                         _qr_dialog(b)
+
+                if highlight_ref == b["booking_ref"]:
+                    st.session_state.pop("scroll_to_booking_ref", None)
 
 
 def _display_pending_bookings(bookings):

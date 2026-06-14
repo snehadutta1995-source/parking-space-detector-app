@@ -291,8 +291,8 @@ def _render_available_cards_table(card_type):
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
-def _process_card_payment(booking, cardholder, card_last4, card_type):
-    """Process card payment after OTP verification."""
+def _process_card_payment_legacy(booking, cardholder, card_last4, card_type):
+    """Legacy payment processing flow kept for reference."""
     with st.spinner("🔄 Processing payment..."):
         time.sleep(1.5)
         try:
@@ -345,3 +345,165 @@ def _process_card_payment(booking, cardholder, card_last4, card_type):
         except Exception as e:
             st.error(f"❌ Payment failed: {str(e)}")
             st.info("Please try again or contact support.")
+
+
+def _render_payment_processing_animation(amount):
+    """Show a short payment-gateway style processing animation."""
+    placeholder = st.empty()
+    placeholder.markdown(f"""
+    <style>
+      .payment-processing-panel {{
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        min-height: 100vh;
+        width: 100vw;
+        background:
+          radial-gradient(circle at center, rgba(34,197,94,.16), transparent 34%),
+          linear-gradient(135deg, rgba(2,6,23,.98), rgba(15,23,42,.98));
+        padding: 32px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }}
+      .payment-orbit {{
+        position: relative;
+        width: 78px;
+        height: 78px;
+        margin: 0 auto 16px;
+        border-radius: 50%;
+        background: rgba(79,124,255,.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }}
+      .payment-orbit::before {{
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 3px solid rgba(255,255,255,.12);
+        border-top-color: #4f7cff;
+        border-right-color: #22c55e;
+        animation: paymentSpin .9s linear infinite;
+      }}
+      .payment-card-icon {{
+        width: 42px;
+        height: 28px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #4f7cff, #22c55e);
+        box-shadow: 0 10px 24px rgba(34,197,94,.2);
+      }}
+      .payment-card-icon::before {{
+        content: "";
+        display: block;
+        height: 5px;
+        margin-top: 6px;
+        background: rgba(2,6,23,.42);
+      }}
+      .payment-processing-title {{
+        color: #f8fafc;
+        font-weight: 800;
+        font-size: 18px;
+        margin-bottom: 6px;
+      }}
+      .payment-processing-copy {{
+        color: #cbd5e1;
+        font-size: 13px;
+        margin-bottom: 16px;
+      }}
+      .payment-steps {{
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        width: min(460px, calc(100vw - 40px));
+        max-width: 460px;
+        margin: 0 auto;
+      }}
+      .payment-step {{
+        border: 1px solid rgba(148,163,184,.22);
+        border-radius: 8px;
+        padding: 9px 8px;
+        color: #dbeafe;
+        font-size: 12px;
+        background: rgba(15,23,42,.72);
+        animation: paymentPulse 1.4s ease-in-out infinite;
+      }}
+      .payment-step:nth-child(2) {{ animation-delay: .18s; }}
+      .payment-step:nth-child(3) {{ animation-delay: .36s; }}
+      @media (max-width: 560px) {{
+        .payment-processing-panel {{ padding: 20px; }}
+        .payment-steps {{ grid-template-columns: 1fr; }}
+      }}
+      @keyframes paymentSpin {{
+        to {{ transform: rotate(360deg); }}
+      }}
+      @keyframes paymentPulse {{
+        0%, 100% {{ transform: translateY(0); border-color: rgba(148,163,184,.22); }}
+        50% {{ transform: translateY(-2px); border-color: rgba(34,197,94,.6); }}
+      }}
+    </style>
+    <div class="payment-processing-panel">
+      <div class="payment-orbit"><div class="payment-card-icon"></div></div>
+      <div class="payment-processing-title">Processing payment</div>
+      <div class="payment-processing-copy">Authorizing Rs. {amount:.2f}. Please do not refresh this page.</div>
+      <div class="payment-steps">
+        <div class="payment-step">Validating card</div>
+        <div class="payment-step">Contacting bank</div>
+        <div class="payment-step">Confirming booking</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    time.sleep(2)
+    return placeholder
+
+
+def _process_card_payment(booking, cardholder, card_last4, card_type):
+    """Process card payment after OTP verification, then route to My Bookings."""
+    processing_panel = _render_payment_processing_animation(booking["amount"])
+    try:
+        payment_id = create_payment(
+            booking["id"],
+            booking["user_id"],
+            booking["amount"],
+            f"{card_type} (****{card_last4})",
+        )
+
+        transaction_ref = f"TXN{datetime.now().strftime('%Y%m%d%H%M%S')}{booking['id']}"
+        update_payment_status(payment_id, "completed", transaction_ref)
+        activate_booking(booking["booking_ref"])
+
+        send_notification(
+            booking["user_id"],
+            "payment_confirmed",
+            "Payment Successful",
+            f"Your parking booking {booking['booking_ref']} is confirmed for {booking['from_date']}",
+            "push",
+        )
+
+        processing_panel.markdown(f"""
+        <div style='position:fixed;inset:0;z-index:999999;min-height:100vh;width:100vw;background:linear-gradient(135deg,rgba(2,6,23,.98),rgba(16,35,26,.98));display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px'>
+            <div style='width:78px;height:78px;border-radius:50%;background:#22c55e;color:#052e16;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:900;margin-bottom:18px'>✓</div>
+            <div style='color:#22c55e;font-size:28px;font-weight:900;margin-bottom:8px'>Payment Successful</div>
+            <div style='color:#d1fae5;font-size:13px;line-height:1.6;max-width:520px'>
+                Booking <code>{booking["booking_ref"]}</code> confirmed with transaction <code>{transaction_ref}</code>.<br>
+                Redirecting to My Bookings...
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        time.sleep(1.4)
+
+        st.session_state["scroll_to_booking_ref"] = booking["booking_ref"]
+        st.session_state.pop("pay_booking_ref", None)
+        st.session_state.pop("pay_otp_stage", None)
+        st.session_state.pop("pay_expected_otp", None)
+        st.session_state.pop("pay_card_meta", None)
+        st.session_state["user_current_page"] = "bookings"
+        st.rerun()
+
+    except Exception as e:
+        processing_panel.empty()
+        st.error(f"Payment failed: {str(e)}")
+        st.info("Please try again or contact support.")
