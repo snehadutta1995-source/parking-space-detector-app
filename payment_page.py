@@ -46,6 +46,25 @@ def _load_valid_cards(csv_path: Path):
     return cards
 
 
+def _load_card_rows(csv_path: Path):
+    """Load valid card rows from a pipe-delimited CSV for tabular display."""
+    rows = []
+    if not csv_path.exists():
+        return rows
+
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f, delimiter="|")
+        for row in reader:
+            rows.append({
+                "Card Number": (row.get("cardNumber") or "").strip(),
+                "CVV": (row.get("cvv") or "").strip(),
+                "Expiry": (row.get("expiry") or "").strip(),
+                "Cardholder Name": (row.get("cardHolderName") or "").strip(),
+                "OTP": (row.get("otp") or "").strip(),
+            })
+    return rows
+
+
 def _normalize_number(card_number: str) -> str:
     return (card_number or "").replace(" ", "").replace("-", "").strip()
 
@@ -178,8 +197,11 @@ def _render_card_payment(booking):
     # ── Step 2: OTP verification ──────────────
     if otp_stage:
         meta = st.session_state.get("pay_card_meta", {})
+        card_type = meta.get("card_type", st.session_state.get("pay_card_type", "Credit Card"))
         st.success(f"✅ Card ending **{meta.get('last4', '----')}** verified.")
         st.info("📲 Enter the 6-digit OTP sent to your registered mobile number.")
+        _render_available_cards_table(card_type)
+
         with st.form("otp_form"):
             otp = st.text_input("OTP", placeholder="6-digit code", max_chars=6, type="password")
             cols = st.columns(2)
@@ -208,10 +230,12 @@ def _render_card_payment(booking):
         return
 
     # ── Step 1: card details ──────────────────
+    card_type = st.radio(
+        "Card Type", ["Credit Card", "Debit Card"], horizontal=True, key="pay_card_type"
+    )
+    _render_available_cards_table(card_type)
+
     with st.form("card_payment_form"):
-        card_type = st.radio(
-            "Card Type", ["Credit Card", "Debit Card"], horizontal=True, key="pay_card_type"
-        )
         cardholder = st.text_input("Cardholder Name", placeholder="Name as on card")
         card_number = st.text_input("Card Number", placeholder="1234 5678 9012 3456", max_chars=23)
 
@@ -251,6 +275,20 @@ def _render_card_payment(booking):
                 "card_type": card_type,
             }
             st.rerun()
+
+
+def _render_available_cards_table(card_type):
+    """Render the stored cards that match the selected card type."""
+    csv_path = CREDIT_CARD_CSV if card_type == "Credit Card" else DEBIT_CARD_CSV
+    rows = _load_card_rows(csv_path)
+    table_title = "Valid Credit Cards" if card_type == "Credit Card" else "Valid Debit Cards"
+
+    st.markdown(f"#### {table_title}")
+    if not rows:
+        st.warning(f"No {card_type.lower()} details found.")
+        return
+
+    st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
 def _process_card_payment(booking, cardholder, card_last4, card_type):
