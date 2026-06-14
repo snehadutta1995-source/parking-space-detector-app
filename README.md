@@ -5,7 +5,7 @@ SlotX is a Streamlit-based smart parking application for booking parking slots, 
 ## Table of Contents
 
 - [Features](#features)
-- [Demo Video](#demo-video)
+- [Screenshots](#screenshots)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
@@ -53,13 +53,31 @@ SlotX is a Streamlit-based smart parking application for booking parking slots, 
 - Waitlist monitoring.
 - Media upload records.
 
-## Demo Video
+## Screenshots
 
-The demo video below walks through the main application functionality: splash and login, user availability, pre-booking, My Bookings, mock payment behavior, QR-ready active bookings, and the admin dashboard.
+### Splash Screen
 
-<video src="docs/slotx-functionality-demo.mp4" controls width="100%"></video>
+![Splash screen](docs/screenshots/01-splash.png)
 
-[Open or download the demo video](docs/slotx-functionality-demo.mp4)
+### Login and Demo Credentials
+
+![Login page](docs/screenshots/02-login.png)
+
+### User Parking Availability
+
+![User availability page](docs/screenshots/03-user-availability.png)
+
+### Pre-Booking Flow
+
+![Pre-book page](docs/screenshots/04-pre-book.png)
+
+### My Bookings
+
+![My bookings page](docs/screenshots/05-my-bookings.png)
+
+### Admin Dashboard
+
+![Admin dashboard](docs/screenshots/06-admin-dashboard.png)
 
 ## Tech Stack
 
@@ -86,7 +104,13 @@ parking-space-detector-app/
 ├── slotx_logo.jpeg
 ├── splash_video.mp4
 ├── docs/
-│   └── slotx-functionality-demo.mp4
+│   └── screenshots/
+│       ├── 01-splash.png
+│       ├── 02-login.png
+│       ├── 03-user-availability.png
+│       ├── 04-pre-book.png
+│       ├── 05-my-bookings.png
+│       └── 06-admin-dashboard.png
 ├── pages/
 │   ├── admin_ui_updated.py
 │   ├── chatbot.py
@@ -417,7 +441,7 @@ cardNumber|cvv|expiry|cardHolderName|otp
 | `payments/valid-credit-card.csv` | Mock valid credit cards. |
 | `payments/valid-debit-card.csv` | Mock valid debit cards. |
 | `uploads/` | Uploaded media storage area. |
-| `docs/slotx-functionality-demo.mp4` | Embedded README walkthrough video. |
+| `docs/screenshots/` | README screenshots. |
 
 ## Troubleshooting
 
@@ -445,12 +469,12 @@ The app persists local data in `parksync.db`. If you want a fresh demo database,
 
 Make sure the selected card type matches the CSV that contains the card. Credit cards are checked against `valid-credit-card.csv`; debit cards are checked against `valid-debit-card.csv`.
 
-### Demo video does not render on GitHub
+### Screenshots do not render on GitHub
 
-Some Markdown renderers block inline video playback. Use the download link under the video, or confirm the file exists at:
+Confirm the files exist under:
 
 ```text
-docs/slotx-functionality-demo.mp4
+docs/screenshots/
 ```
 
 ## Notes for Future Development
