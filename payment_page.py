@@ -16,6 +16,7 @@ from utils.database import (
     get_booking_by_ref, activate_booking,
     create_payment, update_payment_status, send_notification, get_user
 )
+from utils.email_service import send_payment_otp_email
 from utils.styles import apply_theme
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -60,7 +61,6 @@ def _load_card_rows(csv_path: Path):
                 "CVV": (row.get("cvv") or "").strip(),
                 "Expiry": (row.get("expiry") or "").strip(),
                 "Cardholder Name": (row.get("cardHolderName") or "").strip(),
-                "OTP": (row.get("otp") or "").strip(),
             })
     return rows
 
@@ -267,6 +267,12 @@ def _render_card_payment(booking):
             st.error(f"❌ {msg}")
         else:
             number = _normalize_number(card_number)
+            sent, email_msg = send_payment_otp_email(expected_otp, booking, card_type, number[-4:])
+            if not sent:
+                st.error(f"Email OTP failed: {email_msg}")
+                st.info("Configure config/email.ini or config/email.local.ini, then try again.")
+                return
+
             st.session_state["pay_otp_stage"] = True
             st.session_state["pay_expected_otp"] = expected_otp
             st.session_state["pay_card_meta"] = {

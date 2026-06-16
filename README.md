@@ -30,7 +30,7 @@ SlotX is a Streamlit-based smart parking application for booking parking slots, 
 - Mock card payment gateway with:
   - Credit card and debit card selection.
   - Valid card tables displayed for the selected card type.
-  - OTP verification.
+  - OTP verification sent by email through SMTP.
   - Full-screen payment processing animation.
   - Automatic redirect back to My Bookings.
   - Automatic scroll to the most recent paid booking.
@@ -387,14 +387,41 @@ cardNumber|cvv|expiry|cardHolderName|otp
 5. User selects Credit Card or Debit Card.
 6. The matching valid card table is shown.
 7. Card details are validated against the selected CSV file.
-8. OTP stage opens.
-9. The matching valid card table is still visible on the OTP page.
-10. OTP is validated.
-11. Full-screen processing animation is shown.
-12. Payment row is created.
-13. Booking status changes to `active`.
-14. User is redirected to My Bookings.
-15. The page scrolls to the most recently paid booking.
+8. The matching CSV OTP is sent by email through the configured SMTP server.
+9. OTP stage opens.
+10. The matching valid card table is still visible on the OTP page.
+11. OTP is validated.
+12. Full-screen processing animation is shown.
+13. Payment row is created.
+14. Booking status changes to `active`.
+15. User is redirected to My Bookings.
+16. The page scrolls to the most recently paid booking.
+
+### OTP Email Configuration
+
+Email settings are stored outside the payment page in:
+
+```text
+config/email.ini
+```
+
+For Gmail SMTP, fill in:
+
+```ini
+[smtp]
+smtpHost = smtp.gmail.com
+smtpPort = 587
+smtpUseTls = true
+smtpUsername = your-gmail-address@gmail.com
+smtpPassword = your-gmail-app-password
+
+[message]
+emailFrom = your-gmail-address@gmail.com
+emailTo = booking_user
+emailBcc =
+```
+
+`emailTo = booking_user` sends the OTP to the email saved on the booking user profile. You can also set one or more fixed recipients separated by commas. For local secrets, create `config/email.local.ini`; it overrides `config/email.ini` and is ignored by git.
 
 ## Important Workflows
 
@@ -435,6 +462,7 @@ cardNumber|cvv|expiry|cardHolderName|otp
 | File | Purpose |
 | --- | --- |
 | `requirements.txt` | Python package dependencies. |
+| `config/email.ini` | SMTP and recipient settings for OTP email delivery. |
 | `parksync.db` | Local SQLite database. |
 | `slotx_logo.jpeg` | Logo shown on login/splash UI. |
 | `splash_video.mp4` | Splash screen video. |
