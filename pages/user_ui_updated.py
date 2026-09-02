@@ -21,6 +21,8 @@ from utils.database import (
     add_to_waitlist, get_user_waitlist_position, get_waitlist,
     get_entry_exit_logs, get_overstay_alerts,
     send_notification, mark_notification_read,
+    complete_booking, get_overstay_boundary,
+    refresh_overstay_alerts, get_overstay_alert_for_booking,
 )
 from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS, section_header_html, card_html
 
@@ -200,8 +202,20 @@ def _render_footer(user):
     st.markdown("<div style='text-align: center; padding-top: 10px; color: var(--text2); font-size: 11px;'>© 2026 SLotX — Smart Parking Solutions. All rights reserved.</div>", unsafe_allow_html=True)
 
 
+# Session keys backing an in-progress payment (new booking or overstay extension).
+# Cleared whenever the user navigates away instead of finishing it, so the
+# abandoned payment doesn't keep trapping every rerun on the payment page —
+# the booking simply stays in whatever state it was in before payment (pending
+# for a new booking, overstay for an extension).
+_PAYMENT_SESSION_KEYS = (
+    "pay_booking_ref", "pay_extension",
+    "pay_otp_stage", "pay_expected_otp", "pay_card_meta",
+)
+
+
 # ─────────────────────────────────────────────
 def render_user():
+    refresh_overstay_alerts()
     st.markdown(apply_theme(), unsafe_allow_html=True)
 
     BASE_DIR = Path(__file__).resolve().parents[1]
@@ -284,6 +298,10 @@ def render_user():
             with col:
                 if st.button(label, use_container_width=True, key=f"nav_{page_key}"):
                     st.session_state.user_current_page = page_key
+                    # Navigating away cancels any in-progress payment instead of
+                    # trapping the user on the payment page — see _PAYMENT_SESSION_KEYS.
+                    for k in _PAYMENT_SESSION_KEYS:
+                        st.session_state.pop(k, None)
                     st.rerun()
 
         # Determine which page to show
@@ -292,16 +310,7 @@ def render_user():
     # Right: Sign Out Button
     with top_bar_cols[1]:
         if st.button("➡️ Sign Out", use_container_width=True, key="logout_user"):
-            for k in [
-                "logged_in",
-                "user",
-                "role",
-                "user_current_page",
-                "pay_booking_ref",
-                "pay_otp_stage",
-                "pay_expected_otp",
-                "pay_card_meta",
-            ]:
+            for k in ("logged_in", "user", "role", "user_current_page") + _PAYMENT_SESSION_KEYS:
                 if k == "logged_in":
                     st.session_state[k] = False
                 else:
@@ -310,11 +319,19 @@ def render_user():
 
     st.divider()
 
-    # ── Payment interface (when a booking is awaiting payment) ──
-    if st.session_state.get("pay_booking_ref"):
+    # ── Payment interface (when a booking is awaiting payment or an overstay extension) ──
+    if st.session_state.get("pay_booking_ref") or st.session_state.get("pay_extension"):
         from payment_page import render_payment
         render_payment()
         return
+
+    # ── Overstay warning must reappear every time the user navigates to
+    # Bookings, not just once per session — reset its dismissal tracking the
+    # moment "bookings" becomes the active page from a different one, but not
+    # on every rerun while already on it (so closing it sticks for that visit).
+    if page == "bookings" and st.session_state.get("_last_page_seen") != "bookings":
+        st.session_state.pop("dismissed_overstay_alert_ids", None)
+    st.session_state["_last_page_seen"] = page
 
     # ── Page routing ─────────────────────────
     if   page == "availability": _availability()
@@ -558,13 +575,15 @@ def _my_bookings():
             st.rerun()
         return
 
+    _maybe_show_overstay_dialog(bookings)
+
     # Filter bookings by status
     tab_active, tab_pending, tab_completed, tab_cancelled = st.tabs(
         ["🟢 Active", "⏳ Pending Payment", "✅ Completed", "❌ Cancelled"]
     )
     
     with tab_active:
-        active_bookings = [b for b in bookings if b["status"] == "active"]
+        active_bookings = [b for b in bookings if b["status"] in ("active", "overstay")]
         if not active_bookings:
             st.info("No active bookings")
         else:
@@ -592,6 +611,41 @@ def _my_bookings():
             _display_bookings_list(cancelled_bookings)
 
 
+def _maybe_show_overstay_dialog(bookings):
+    """Pop up a dismissible warning if any of the user's bookings are overstaying.
+    Dismissal is tracked per overstay-alert id in session state, so closing it
+    doesn't get re-shown on every rerun — it only reappears for a genuinely new
+    overstay episode (a new alert id), e.g. after extending and overstaying again."""
+    overstay_bookings = [b for b in bookings if b["status"] == "overstay"]
+    if not overstay_bookings:
+        return
+
+    dismissed = st.session_state.setdefault("dismissed_overstay_alert_ids", set())
+    pending = []
+    for b in overstay_bookings:
+        alert = get_overstay_alert_for_booking(b["id"])
+        if alert and alert["id"] not in dismissed:
+            pending.append((b, alert))
+
+    if pending:
+        _overstay_warning_dialog(pending)
+
+
+@st.experimental_dialog("⚠️ Overstay Warning")
+def _overstay_warning_dialog(pending):
+    for b, alert in pending:
+        st.error(
+            f"**{b['booking_ref']}** (Slot {b['slot_code']}) is overstaying by "
+            f"{_fmt_minutes(alert['overstay_minutes'])}. Extend it below or it will keep accruing."
+        )
+    st.caption("Open the booking under My Bookings → Active to choose an extension and pay.")
+    if st.button("Close", use_container_width=True):
+        dismissed = st.session_state.setdefault("dismissed_overstay_alert_ids", set())
+        for _, alert in pending:
+            dismissed.add(alert["id"])
+        st.rerun()
+
+
 def _qr_buffer(b, box_size: int = 8):
     """Build a PNG buffer of the booking QR code."""
     qr_data = f"SLOTX|{b['booking_ref']}|{b['vehicle_no']}|{b['slot_code']}"
@@ -617,7 +671,7 @@ def _qr_dialog(b):
     )
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        st.image(_qr_buffer(b, box_size=16), use_column_width=True)
+        st.image(_qr_buffer(b, box_size=16), width="stretch")
     st.caption("Scan this code at the gate to check in / out.")
 
 
@@ -626,7 +680,7 @@ def _render_active_qr(b, key_prefix: str):
     uid = f"{key_prefix}_{b['id']}"
 
     # Render the QR image directly and visibly.
-    st.image(_qr_buffer(b), width=150, use_column_width=False)
+    st.image(_qr_buffer(b), width=150)
 
     # CSS to make the button invisible but still clickable, positioned over the image.
     st.markdown(
@@ -652,7 +706,7 @@ def _render_active_qr(b, key_prefix: str):
 
 def _display_bookings_list(bookings):
     """Display list of bookings."""
-    active = [b for b in bookings if b["status"] == "active"]
+    active = [b for b in bookings if b["status"] in ("active", "overstay")]
     spent = sum(b["amount"] for b in bookings if b["status"] != "cancelled")
 
     m1, m2, m3 = st.columns(3)
@@ -663,10 +717,11 @@ def _display_bookings_list(bookings):
     st.divider()
 
     for b in bookings:
-        status_icon = "🟢" if b["status"] == "active" else ("✅" if b["status"] == "completed" else "❌")
-        with st.expander(f"{status_icon} {b['booking_ref']} — `{b['slot_code']}` · ₹{b['amount']:.0f}", expanded=b["status"] == "active"):
+        is_active = b["status"] in ("active", "overstay")
+        status_icon = "⚠️" if b["status"] == "overstay" else ("🟢" if b["status"] == "active" else ("✅" if b["status"] == "completed" else "❌"))
+        with st.expander(f"{status_icon} {b['booking_ref']} — `{b['slot_code']}` · ₹{b['amount']:.0f}", expanded=is_active):
             col1, col2 = st.columns([1.5, 1])
-            
+
             with col1:
                 st.markdown(f"""
                 - **Slot:** {b['slot_code']} (Floor {b['floor']})
@@ -676,9 +731,9 @@ def _display_bookings_list(bookings):
                 - **Duration:** {b['duration_hr']} hour(s)
                 - **Amount:** ₹{b['amount']:.0f}
                 """)
-            
+
             with col2:
-                if b["status"] == "active":
+                if is_active:
                     _render_active_qr(b, key_prefix="list")
 
 
@@ -715,9 +770,12 @@ def _display_bookings_grid(bookings, cols_per_row: int = 3, highlight_ref: str =
                     """, height=0)
 
                 with st.container(border=True):
+                    status_icon = "⚠️" if b["status"] == "overstay" else "🟢"
                     st.markdown(
                         f"<div style='font-family:Syne,sans-serif;font-weight:700;font-size:15px;color:var(--text)'>"
-                        f"🟢 {b['booking_ref']}</div>"
+                        f"{status_icon} {b['booking_ref']}"
+                        + (" · <span style='color:#ef4444'>OVERSTAY</span>" if b["status"] == "overstay" else "")
+                        + f"</div>"
                         f"<div style='color:var(--text2);font-size:12px;margin-bottom:8px'>"
                         f"Slot {b['slot_code']} · Floor {b['floor']}</div>",
                         unsafe_allow_html=True,
@@ -730,11 +788,78 @@ def _display_bookings_grid(bookings, cols_per_row: int = 3, highlight_ref: str =
                     - **Amount:** ₹{b['amount']:.0f}
                     """)
 
+                    _render_checkout_controls(b)
+
                     if st.button("📱 Click to Generate QR", key=f"qr_btn_{b['id']}", use_container_width=True):
                         _qr_dialog(b)
 
                 if highlight_ref == b["booking_ref"]:
                     st.session_state.pop("scroll_to_booking_ref", None)
+
+
+def _fmt_minutes(total_minutes: int) -> str:
+    """Format a minute count as '1h 05m' / '42m'."""
+    hrs, mins = divmod(max(total_minutes, 0), 60)
+    return f"{hrs}h {mins:02d}m" if hrs else f"{mins}m"
+
+
+def _render_checkout_controls(b):
+    """Early-checkout / overstay controls for one active booking card.
+
+    Booking status is the source of truth (kept in sync by refresh_overstay_alerts(),
+    called on every page load): 'overstay' shows a persistent warning plus an option to
+    extend the booking to a new checkout time of the user's choosing. Choosing an
+    extension routes to the payment gateway page (same one used for the original
+    booking) for the exact extension cost — there is no automatic checkout, and no
+    charge is taken until the payment there succeeds. 'active' shows a 'Checkout
+    Early' button that ends the booking immediately with a warning banner about time
+    forfeited.
+    """
+    if b["status"] == "overstay":
+        alert = get_overstay_alert_for_booking(b["id"])
+        if not alert:
+            return  # refresh_overstay_alerts() hasn't caught up yet (crossed the 1-min threshold this instant)
+        boundary = get_overstay_boundary(b)
+        if boundary is None:
+            return
+        st.error(f"⚠️ **Overstay:** {_fmt_minutes(alert['overstay_minutes'])} past {boundary.strftime('%H:%M')}.")
+
+        rate = get_rates().get(b["slot_type"], 0.0)
+        hours = st.number_input(
+            "Extend booking by (hours)", min_value=1, max_value=24, value=1, step=1,
+            key=f"extend_hours_{b['id']}",
+        )
+        new_end = boundary + timedelta(hours=int(hours))
+        cost = round(rate * hours, 2)
+        st.caption(f"New checkout time: **{new_end.strftime('%H:%M')}** on {new_end.strftime('%d %b')} · Cost: **₹{cost:.2f}**")
+
+        if st.button(f"💳 Extend to {new_end.strftime('%H:%M')} & Pay ₹{cost:.2f}",
+                     key=f"extend_pay_{b['id']}", use_container_width=True):
+            st.session_state["pay_extension"] = {
+                "booking_ref": b["booking_ref"],
+                "alert_id": alert["id"],
+                "hours": int(hours),
+                "cost": cost,
+                "new_end": new_end.isoformat(sep=" "),
+            }
+            st.rerun()
+        return
+
+    boundary = get_overstay_boundary(b)
+    if boundary is None:
+        return
+
+    now = datetime.now()
+    remaining_min = int((boundary - now).total_seconds() // 60)
+    st.caption(f"Booked until {boundary.strftime('%H:%M')} · {_fmt_minutes(remaining_min)} remaining")
+    if st.button("🚪 Checkout Early", key=f"checkout_early_{b['id']}", use_container_width=True):
+        complete_booking(b["id"])
+        st.warning(
+            f"⚠️ Checked out early — booking {b['booking_ref']} was scheduled until "
+            f"{boundary.strftime('%H:%M')} ({_fmt_minutes(remaining_min)} remaining). "
+            f"Slot {b['slot_code']} has been released."
+        )
+        st.rerun()
 
 
 def _display_pending_bookings(bookings):
@@ -827,6 +952,6 @@ def _profile_page():
         if bookings:
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Total Bookings", len(bookings))
-            col2.metric("Active", len([b for b in bookings if b["status"] == "active"]))
+            col2.metric("Active", len([b for b in bookings if b["status"] in ("active", "overstay")]))
             col3.metric("Completed", len([b for b in bookings if b["status"] == "completed"]))
             col4.metric("Total Spent", f"₹{sum(b['amount'] for b in bookings if b['status'] != 'cancelled'):.0f}")

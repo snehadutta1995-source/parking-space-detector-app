@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from utils.database import (
-    get_booking_by_ref, activate_booking,
+    get_booking_by_ref, activate_booking, extend_booking,
     create_payment, update_payment_status, send_notification, get_user
 )
 from utils.email_service import send_payment_otp_email
@@ -94,21 +94,28 @@ def verify_card_details(card_type, cardholder, card_number, expiry, cvv):
     if cardholder.strip().lower() != record["cardHolderName"].lower():
         return False, "Cardholder name does not match our records.", None
 
-    return True, "Card verified. An OTP has been sent to your registered mobile number.", record["otp"]
+    return True, "Card verified. An OTP has been sent to your registered email address.", record["otp"]
 
 
 # ─────────────────────────────────────────────
 # Page
 # ─────────────────────────────────────────────
 def render_payment(booking_ref: str = None):
-    """Main payment gateway page. booking_ref falls back to session state."""
+    """Main payment gateway page. booking_ref falls back to session state.
+
+    Also handles overstay-extension payments: when st.session_state['pay_extension']
+    is set (booking_ref, alert_id, hours, cost, new_end), the page charges the
+    extension cost instead of the booking's base amount, and on success extends
+    the booking's schedule (extend_booking) instead of activating it."""
     st.markdown(apply_theme(), unsafe_allow_html=True)
 
+    extension = st.session_state.get("pay_extension")
     if booking_ref is None:
-        booking_ref = st.session_state.get("pay_booking_ref")
+        booking_ref = (extension or {}).get("booking_ref") or st.session_state.get("pay_booking_ref")
 
     def _go_back(to_my_bookings: bool = False):
         st.session_state.pop("pay_booking_ref", None)
+        st.session_state.pop("pay_extension", None)
         st.session_state.pop("pay_otp_stage", None)
         st.session_state.pop("pay_expected_otp", None)
         st.session_state.pop("pay_card_meta", None)
@@ -130,20 +137,23 @@ def render_payment(booking_ref: str = None):
             st.rerun()
         return
 
-    if booking["status"] == "active":
+    if not extension and booking["status"] in ("active", "overstay"):
         # Payment already completed — route straight to My Bookings.
         _go_back(to_my_bookings=True)
         st.rerun()
         return
 
+    amount_due = extension["cost"] if extension else booking["amount"]
+
     # Header
-    st.markdown("""
+    subtitle = "Pay to extend your parking booking" if extension else "Complete your parking booking payment"
+    st.markdown(f"""
     <div style='display:flex;align-items:center;gap:12px;margin-bottom:1.5rem'>
       <div style='width:40px;height:40px;background:linear-gradient(135deg,#4f7cff,#22c55e);border-radius:10px;
                   display:flex;align-items:center;justify-content:center;font-size:20px'>💳</div>
       <div>
         <h1 style='margin:0;font-family:Syne,sans-serif'>Secure Payment</h1>
-        <div style='font-size:13px;color:var(--text2)'>Complete your parking booking payment</div>
+        <div style='font-size:13px;color:var(--text2)'>{subtitle}</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -161,26 +171,32 @@ def render_payment(booking_ref: str = None):
             st.metric("Booking Ref", booking["booking_ref"])
             st.metric("Slot", booking["slot_code"])
         with summary_cols[1]:
-            st.metric("Date", booking["from_date"])
-            st.metric("Duration", f"{booking['duration_hr']}h")
+            if extension:
+                new_end_dt = datetime.fromisoformat(extension["new_end"])
+                st.metric("Extend by", f"{extension['hours']}h")
+                st.metric("New checkout", new_end_dt.strftime("%H:%M"))
+            else:
+                st.metric("Date", booking["from_date"])
+                st.metric("Duration", f"{booking['duration_hr']}h")
 
         st.divider()
-        _render_card_payment(booking)
+        _render_card_payment(booking, amount_due, extension)
 
     with col2:
         st.markdown("### Amount Due")
+        amount_label = "Extension Charge" if extension else "Base Amount"
         st.markdown(f"""
         <div style='background:var(--bg3);border-radius:10px;padding:16px;border:1px solid var(--border)'>
             <div style='font-size:13px;color:var(--text2);margin-bottom:8px'>
                 <div style='display:flex;justify-content:space-between;padding:4px 0'>
-                    <span>Base Amount</span>
-                    <span>₹{booking['amount']:.2f}</span>
+                    <span>{amount_label}</span>
+                    <span>₹{amount_due:.2f}</span>
                 </div>
             </div>
             <div style='border-top:1px solid var(--border);padding-top:8px;margin-top:8px'>
                 <div style='display:flex;justify-content:space-between;padding:4px 0;font-size:16px;font-weight:700'>
                     <span>Total</span>
-                    <span style='color:#22c55e'>₹{booking['amount']:.2f}</span>
+                    <span style='color:#22c55e'>₹{amount_due:.2f}</span>
                 </div>
             </div>
         </div>
@@ -188,7 +204,7 @@ def render_payment(booking_ref: str = None):
         st.info("🔒 Your payment is secure and encrypted.")
 
 
-def _render_card_payment(booking):
+def _render_card_payment(booking, amount_due, extension=None):
     """Render credit/debit card payment form with OTP verification."""
     st.markdown("### Pay with Card")
 
@@ -199,7 +215,7 @@ def _render_card_payment(booking):
         meta = st.session_state.get("pay_card_meta", {})
         card_type = meta.get("card_type", st.session_state.get("pay_card_type", "Credit Card"))
         st.success(f"✅ Card ending **{meta.get('last4', '----')}** verified.")
-        st.info("📲 Enter the 6-digit OTP sent to your registered mobile number.")
+        st.info("📲 Enter the 6-digit OTP sent to your registered email address.")
         _render_available_cards_table(card_type)
 
         with st.form("otp_form"):
@@ -207,7 +223,7 @@ def _render_card_payment(booking):
             cols = st.columns(2)
             with cols[0]:
                 verify = st.form_submit_button(
-                    f"🔒 Verify & Pay ₹{booking['amount']:.2f}", use_container_width=True
+                    f"🔒 Verify & Pay ₹{amount_due:.2f}", use_container_width=True
                 )
             with cols[1]:
                 cancel = st.form_submit_button("↩ Use a different card", use_container_width=True)
@@ -226,7 +242,8 @@ def _render_card_payment(booking):
                 st.error("❌ Incorrect OTP. Please try again.")
             else:
                 _process_card_payment(booking, meta.get("cardholder", ""),
-                                      meta.get("last4", ""), meta.get("card_type", "Card"))
+                                      meta.get("last4", ""), meta.get("card_type", "Card"),
+                                      amount_due, extension)
         return
 
     # ── Step 1: card details ──────────────────
@@ -246,7 +263,7 @@ def _render_card_payment(booking):
             cvv = st.text_input("CVV", placeholder="123", max_chars=4, type="password")
 
         submit = st.form_submit_button(
-            f"Continue to Pay ₹{booking['amount']:.2f}", use_container_width=True
+            f"Continue to Pay ₹{amount_due:.2f}", use_container_width=True
         )
 
     if submit:
@@ -267,7 +284,9 @@ def _render_card_payment(booking):
             st.error(f"❌ {msg}")
         else:
             number = _normalize_number(card_number)
-            sent, email_msg = send_payment_otp_email(expected_otp, booking, card_type, number[-4:])
+            email_booking = dict(booking)
+            email_booking["amount"] = amount_due
+            sent, email_msg = send_payment_otp_email(expected_otp, email_booking, card_type, number[-4:])
             if not sent:
                 st.error(f"Email OTP failed: {email_msg}")
                 st.info("Configure config/email.ini or config/email.local.ini, then try again.")
@@ -466,26 +485,45 @@ def _render_payment_processing_animation(amount):
     return placeholder
 
 
-def _process_card_payment(booking, cardholder, card_last4, card_type):
-    """Process card payment after OTP verification, then route to My Bookings."""
-    processing_panel = _render_payment_processing_animation(booking["amount"])
+def _process_card_payment(booking, cardholder, card_last4, card_type, amount_due, extension=None):
+    """Process card payment after OTP verification, then route to My Bookings.
+
+    For a normal booking payment, activates the booking (pending -> active).
+    For an overstay extension payment, extends the booking's schedule instead
+    (extend_booking) — the booking's own duration_hr/to_time are updated so the
+    new checkout time is reflected everywhere the booking is displayed."""
+    processing_panel = _render_payment_processing_animation(amount_due)
     try:
+        payment_method = f"{card_type} (****{card_last4})"
+        if extension:
+            payment_method += f" — Overstay Extension ({extension['hours']}h)"
         payment_id = create_payment(
             booking["id"],
             booking["user_id"],
-            booking["amount"],
-            f"{card_type} (****{card_last4})",
+            amount_due,
+            payment_method,
         )
 
         transaction_ref = f"TXN{datetime.now().strftime('%Y%m%d%H%M%S')}{booking['id']}"
         update_payment_status(payment_id, "completed", transaction_ref)
-        activate_booking(booking["booking_ref"])
+
+        if extension:
+            extend_booking(booking["id"], extension["alert_id"], extension["new_end"], amount_due)
+            new_end_dt = datetime.fromisoformat(extension["new_end"])
+            confirm_line = f"Booking <code>{booking['booking_ref']}</code> extended to {new_end_dt.strftime('%H:%M')} with transaction <code>{transaction_ref}</code>."
+            notif_title = "Booking Extended"
+            notif_msg = f"Your parking booking {booking['booking_ref']} has been extended to {new_end_dt.strftime('%H:%M')} on {new_end_dt.strftime('%Y-%m-%d')}"
+        else:
+            activate_booking(booking["booking_ref"])
+            confirm_line = f"Booking <code>{booking['booking_ref']}</code> confirmed with transaction <code>{transaction_ref}</code>."
+            notif_title = "Payment Successful"
+            notif_msg = f"Your parking booking {booking['booking_ref']} is confirmed for {booking['from_date']}"
 
         send_notification(
             booking["user_id"],
             "payment_confirmed",
-            "Payment Successful",
-            f"Your parking booking {booking['booking_ref']} is confirmed for {booking['from_date']}",
+            notif_title,
+            notif_msg,
             "push",
         )
 
@@ -494,7 +532,7 @@ def _process_card_payment(booking, cardholder, card_last4, card_type):
             <div style='width:78px;height:78px;border-radius:50%;background:#22c55e;color:#052e16;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:900;margin-bottom:18px'>✓</div>
             <div style='color:#22c55e;font-size:28px;font-weight:900;margin-bottom:8px'>Payment Successful</div>
             <div style='color:#d1fae5;font-size:13px;line-height:1.6;max-width:520px'>
-                Booking <code>{booking["booking_ref"]}</code> confirmed with transaction <code>{transaction_ref}</code>.<br>
+                {confirm_line}<br>
                 Redirecting to My Bookings...
             </div>
         </div>
@@ -503,6 +541,7 @@ def _process_card_payment(booking, cardholder, card_last4, card_type):
 
         st.session_state["scroll_to_booking_ref"] = booking["booking_ref"]
         st.session_state.pop("pay_booking_ref", None)
+        st.session_state.pop("pay_extension", None)
         st.session_state.pop("pay_otp_stage", None)
         st.session_state.pop("pay_expected_otp", None)
         st.session_state.pop("pay_card_meta", None)

@@ -37,6 +37,7 @@ defaults = {
     "role":      None,
     "dark":      True,
     "splash_done": False,
+    "intro_done": False,
     "auth_mode": "login",
 }
 for k, v in defaults.items():
@@ -47,24 +48,17 @@ for k, v in defaults.items():
 st.markdown(apply_theme(), unsafe_allow_html=True)
 
 # ── XARA Floating Chatbot ─────────────────────
-import streamlit.components.v1 as components
-from utils.chatbot_utils import create_chatbot, get_xara_floating_widget
-components.html(get_xara_floating_widget(), height=0, scrolling=False)
-if "xara_messages" not in st.session_state:
-    st.session_state.xara_messages = []
-if "xara_instance" not in st.session_state:
-    st.session_state.xara_instance = create_chatbot()
+from utils.chatbot_utils import render_xara_widget
+render_xara_widget()
 
-# ── Splash screen ────────────────────────────
-# Initialize session state variables
 # ── Splash screen / Intro page ────────────────────────────
-# Added splash video code only. Existing login/dashboard code below remains unchanged.
 if "intro_done" not in st.session_state:
     st.session_state.intro_done = False
 if "auth_mode" not in st.session_state:
     st.session_state.auth_mode = "login"
 
 
+@st.cache_data
 def _video_base64(path):
     try:
         with open(path, "rb") as f:
@@ -73,6 +67,7 @@ def _video_base64(path):
         return None
 
 
+@st.cache_data
 def _image_base64(path):
     try:
         with open(path, "rb") as f:
@@ -87,20 +82,12 @@ def intro_page():
     <style>
     .block-container {padding:0 !important; max-width:100% !important;}
     [data-testid="stHeader"], footer {display:none !important;}
-    .intro-shell{position:fixed; inset:0; overflow:hidden; background:#020712;}
+    .intro-shell{position:fixed; inset:0; overflow:hidden; background:#020712; z-index:1;}
     .intro-video{position:absolute; inset:0; width:100vw; height:100vh; object-fit:contain; background:#020712;}
     .intro-overlay{position:absolute; inset:0; background:linear-gradient(90deg,rgba(2,7,18,.72),rgba(2,7,18,.18),rgba(2,7,18,.72));}
-    .intro-content{position:fixed; z-index:2; inset:0; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px;}
-    .intro-badge{padding:8px 18px; border-radius:999px; background:rgba(0,229,184,.12); border:1px solid rgba(0,229,184,.32); color:#00E5B8; font-weight:800; letter-spacing:.10em; font-size:12px; text-transform:uppercase;}
-    .intro-title{font-family:'Syne',sans-serif; font-size:70px; line-height:1.05; font-weight:900; color:white; margin:18px 0 12px; letter-spacing:-.05em;}
-    .intro-title span{color:#00E5B8;}
-    .intro-sub{color:#B8C7D9; font-size:18px; max-width:720px; line-height:1.7; margin-bottom:32px;}
-    /* Center only one Enter App button over the video */
     .stButton{position:fixed !important; left:50% !important; top:85% !important; transform:translateX(-50%) !important; z-index:10 !important; width:230px !important;}
     .stButton>button{height:56px !important; border-radius:999px !important; font-weight:900 !important; font-size:17px !important; border:1px solid rgba(0,229,184,.45) !important; background:linear-gradient(135deg,#00E5B8,#38C8F8) !important; color:#020712 !important; box-shadow:0 12px 40px rgba(0,229,184,.34) !important;}
     @media (max-width: 768px){
-        .intro-title{font-size:48px;}
-        .intro-sub{font-size:15px;}
         .stButton{top:72% !important; width:210px !important;}
     }
     </style>

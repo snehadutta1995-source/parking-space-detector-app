@@ -1,0 +1,6 @@
+[client]
+# Hides the developer-only menu/toolbar actions (Rerun, Clear cache, Deploy).
+# Clear cache is bound to the plain "C" keydown whenever focus isn't in a text
+# input, so pressing Ctrl+C to copy selected page text (e.g. a booking ref)
+# outside an input field was triggering the "Clear caches" confirmation dialog.
+toolbarMode = "viewer"

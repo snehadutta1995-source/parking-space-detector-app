@@ -7,7 +7,7 @@ import sqlite3
 import hashlib
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "parksync.db")
@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS bookings (
     duration_hr INTEGER NOT NULL DEFAULT 1,
     amount      REAL    NOT NULL,
     status      TEXT    NOT NULL DEFAULT 'pending',
-    booked_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    booked_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    overstay_paid_until TEXT
 );
 
 CREATE TABLE IF NOT EXISTS payments (
@@ -148,6 +149,11 @@ def init_db():
     """Create tables and seed demo data if empty."""
     conn = get_conn()
     conn.executescript(SCHEMA)
+
+    # Migration: add overstay_paid_until to bookings if upgrading an existing DB
+    booking_cols = [r["name"] for r in conn.execute("PRAGMA table_info(bookings)").fetchall()]
+    if "overstay_paid_until" not in booking_cols:
+        conn.execute("ALTER TABLE bookings ADD COLUMN overstay_paid_until TEXT")
 
     # Seed admin
     if not conn.execute("SELECT 1 FROM users WHERE role='admin'").fetchone():
@@ -425,6 +431,7 @@ def cancel_booking(booking_id: int):
     if row:
         conn.execute("UPDATE bookings SET status='cancelled' WHERE id=?", (booking_id,))
         conn.execute("UPDATE parking_slots SET status='vacant' WHERE id=?", (row["slot_id"],))
+        conn.execute("UPDATE overstay_alerts SET status='resolved' WHERE booking_id=? AND status='pending'", (booking_id,))
         conn.commit()
     conn.close()
 
@@ -435,8 +442,42 @@ def complete_booking(booking_id: int):
     if row:
         conn.execute("UPDATE bookings SET status='completed' WHERE id=?", (booking_id,))
         conn.execute("UPDATE parking_slots SET status='vacant' WHERE id=?", (row["slot_id"],))
+        conn.execute("UPDATE overstay_alerts SET status='resolved' WHERE booking_id=? AND status='pending'", (booking_id,))
         conn.commit()
     conn.close()
+
+
+def get_booking_schedule(booking: dict):
+    """Parse a booking's scheduled start/end datetimes from from_date/from_time/duration_hr.
+    Returns (start, end) or (None, None) if the stored time can't be parsed."""
+    try:
+        start = datetime.strptime(f"{booking['from_date']} {booking['from_time']}", "%Y-%m-%d %H:%M")
+    except (ValueError, KeyError, IndexError):
+        return None, None
+    return start, start + timedelta(hours=booking["duration_hr"])
+
+
+def get_overstay_boundary(booking: dict):
+    """The datetime after which a booking counts as overstaying: normally its
+    scheduled end time, but pushed forward to `overstay_paid_until` once an
+    overstay charge has been paid — so a settled booking isn't immediately
+    re-flagged, and any further overstay is billed only from that point on.
+    Returns None if the schedule can't be parsed."""
+    _, scheduled_end = get_booking_schedule(booking)
+    if scheduled_end is None:
+        return None
+    try:
+        paid_until_raw = booking["overstay_paid_until"]
+    except (KeyError, IndexError):
+        paid_until_raw = None
+    if paid_until_raw:
+        try:
+            paid_until = datetime.fromisoformat(paid_until_raw)
+        except ValueError:
+            paid_until = None
+        if paid_until and paid_until > scheduled_end:
+            return paid_until
+    return scheduled_end
 
 
 # ─────────────────────────────────────────────
@@ -692,19 +733,93 @@ def mark_notification_read(notification_id: int):
 # OVERSTAY ALERTS
 # ─────────────────────────────────────────────
 
-def create_overstay_alert(booking_id: int, user_id: int, overstay_minutes: int):
-    """Create overstay alert and calculate penalty."""
-    penalty_rate = 5.0  # ₹5 per minute overstay
-    penalty_amount = (overstay_minutes * penalty_rate)
-    
+def refresh_overstay_alerts():
+    """Scan every 'active' or already-'overstay' booking and create/update a pending
+    overstay alert for any that are past their overstay boundary (scheduled end time,
+    or the point they were last paid up to). Bookings that cross that boundary are
+    flipped to status='overstay' right here — there is no auto-checkout; the user
+    must extend the booking (see extend_booking) to return to 'active', or an
+    admin resolves/completes/cancels it. The charge is billed at the slot's vehicle
+    type hourly rate (from the rates table), pro-rated per minute overstayed."""
     conn = get_conn()
-    conn.execute(
-        "INSERT INTO overstay_alerts (booking_id, user_id, overstay_minutes, penalty_amount) VALUES (?,?,?,?)",
-        (booking_id, user_id, overstay_minutes, penalty_amount),
-    )
+    rates = {r["vehicle_type"]: r["rate_per_hr"] for r in conn.execute("SELECT * FROM rates").fetchall()}
+    rows = conn.execute("""
+        SELECT b.id, b.user_id, b.from_date, b.from_time, b.duration_hr, b.overstay_paid_until, p.type AS slot_type
+        FROM bookings b JOIN parking_slots p ON b.slot_id = p.id
+        WHERE b.status IN ('active', 'overstay')
+    """).fetchall()
+    now = datetime.now()
+    for row in rows:
+        boundary = get_overstay_boundary(row)
+        if boundary is None:
+            continue
+        overstay_minutes = int((now - boundary).total_seconds() // 60)
+        if overstay_minutes < 1:
+            continue
+        rate = rates.get(row["slot_type"], 0.0)
+        penalty_amount = round(rate / 60.0 * overstay_minutes, 2)
+
+        conn.execute("UPDATE bookings SET status='overstay' WHERE id=?", (row["id"],))
+
+        existing = conn.execute(
+            "SELECT id FROM overstay_alerts WHERE booking_id=? AND status='pending'",
+            (row["id"],),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE overstay_alerts SET overstay_minutes=?, penalty_amount=? WHERE id=?",
+                (overstay_minutes, penalty_amount, existing["id"]),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO overstay_alerts (booking_id, user_id, overstay_minutes, penalty_amount) VALUES (?,?,?,?)",
+                (row["id"], row["user_id"], overstay_minutes, penalty_amount),
+            )
     conn.commit()
     conn.close()
-    return penalty_amount
+
+
+def extend_booking(booking_id: int, alert_id, new_end: str, additional_cost: float):
+    """Extend a booking so its schedule now ends at `new_end` (an ISO datetime
+    string) — updates duration_hr and to_time to match, so the booking's own
+    displayed time reflects the extension (not just an internal marker), adds
+    `additional_cost` to its total amount, resolves `alert_id` if given, and
+    returns the booking to 'active'. Does NOT check the booking out — the slot
+    stays occupied and the user remains parked."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT from_date, from_time, amount FROM bookings WHERE id=?", (booking_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return
+    try:
+        start = datetime.strptime(f"{row['from_date']} {row['from_time']}", "%Y-%m-%d %H:%M")
+        end = datetime.fromisoformat(new_end)
+    except ValueError:
+        conn.close()
+        return
+    new_duration = max(round((end - start).total_seconds() / 3600), 1)
+    new_amount = row["amount"] + additional_cost
+    conn.execute(
+        "UPDATE bookings SET duration_hr=?, to_time=?, amount=?, status='active' WHERE id=?",
+        (new_duration, end.strftime("%H:%M"), new_amount, booking_id),
+    )
+    if alert_id:
+        conn.execute("UPDATE overstay_alerts SET status='resolved' WHERE id=?", (alert_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_overstay_alert_for_booking(booking_id: int):
+    """Get the current pending overstay alert for a booking, if any."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM overstay_alerts WHERE booking_id=? AND status='pending' ORDER BY created_at DESC LIMIT 1",
+        (booking_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def get_overstay_alerts(status: str = "pending"):
@@ -719,9 +834,18 @@ def get_overstay_alerts(status: str = "pending"):
 
 
 def resolve_overstay_alert(alert_id: int):
-    """Mark overstay alert as resolved."""
+    """Mark an overstay alert as resolved (admin waiving the charge) and return
+    the booking to 'active', paid up to now — an amnesty for admins clearing an
+    alert manually, without extending the booking's actual scheduled time the
+    way extend_booking() does for a paid extension."""
     conn = get_conn()
+    alert = conn.execute("SELECT booking_id FROM overstay_alerts WHERE id=?", (alert_id,)).fetchone()
     conn.execute("UPDATE overstay_alerts SET status='resolved' WHERE id=?", (alert_id,))
+    if alert:
+        conn.execute(
+            "UPDATE bookings SET status='active', overstay_paid_until=? WHERE id=?",
+            (datetime.now().isoformat(sep=" "), alert["booking_id"]),
+        )
     conn.commit()
     conn.close()
 
@@ -762,7 +886,7 @@ def get_analytics():
     vacant  = conn.execute("SELECT COUNT(*) FROM parking_slots WHERE status='vacant'").fetchone()[0]
     occ     = conn.execute("SELECT COUNT(*) FROM parking_slots WHERE status='occupied'").fetchone()[0]
     t_books = conn.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]
-    active  = conn.execute("SELECT COUNT(*) FROM bookings WHERE status='active'").fetchone()[0]
+    active  = conn.execute("SELECT COUNT(*) FROM bookings WHERE status IN ('active', 'overstay')").fetchone()[0]
     revenue = conn.execute("SELECT COALESCE(SUM(amount),0) FROM bookings WHERE status!='cancelled'").fetchone()[0]
     today   = datetime.now().strftime("%Y-%m-%d")
     today_r = conn.execute(

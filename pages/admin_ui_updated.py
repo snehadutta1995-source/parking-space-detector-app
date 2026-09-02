@@ -20,6 +20,7 @@ from utils.database import (
     save_media_record, get_all_media,
     get_entry_exit_logs, get_overstay_alerts, resolve_overstay_alert, log_entry_by_ref, log_exit_by_ref,
     get_waitlist, remove_from_waitlist,
+    refresh_overstay_alerts,
 )
 from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS, section_header_html, card_html
 
@@ -111,6 +112,7 @@ def _render_footer():
 
 # ─────────────────────────────────────────────
 def render_admin():
+    refresh_overstay_alerts()
     st.markdown(apply_theme(), unsafe_allow_html=True)
 
     BASE_DIR = Path(__file__).resolve().parents[1]
@@ -251,14 +253,15 @@ def _dashboard():
         if bookings:
             rows = []
             for b in bookings:
-                status_icon = "🟢" if b["status"] == "active" else ("✅" if b["status"] == "completed" else "❌")
+                status_icons = {"active": "🟢", "overstay": "⚠️", "completed": "✅", "cancelled": "❌", "pending": "⏳"}
+                status_icon = status_icons.get(b["status"], "•")
                 rows.append({
                     "Ref":     b["booking_ref"],
                     "User":    b["user_name"],
                     "Vehicle": b["vehicle_no"],
                     "Slot":    b["slot_code"],
                     "Amount":  f"₹{b['amount']:.0f}",
-                    "Status":  f"{status_icon}",
+                    "Status":  f"{status_icon} {b['status'].capitalize()}",
                 })
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         else:
@@ -393,14 +396,27 @@ def _slots_page():
     with tab_manage:
         st.markdown("#### Edit or Delete Slot")
         slots = get_all_slots()
-        selected = st.selectbox("Select Slot", [f"{s['slot_code']} (Floor {s['floor']})" for s in slots])
-        sel_slot = next((s for s in slots if f"{s['slot_code']} (Floor {s['floor']})" == selected), None)
+
+        floors = [f for f in ["G", "1", "2"] if any(s["floor"] == f for s in slots)]
+        if not floors:
+            st.info("No slots to edit yet.")
+            sel_slot = None
+        else:
+            sel_floor = st.selectbox("Select Floor", floors, key="edit_slot_floor")
+            floor_slots = [s for s in slots if s["floor"] == sel_floor]
+            slot_labels = {s["id"]: s["slot_code"] or f"(unnamed slot #{s['id']})" for s in floor_slots}
+            selected = st.selectbox("Select Slot", list(slot_labels.values()), key="edit_slot_code")
+            sel_slot = next((s for s in floor_slots if slot_labels[s["id"]] == selected), None)
 
         if sel_slot:
+            # Keyed by slot id so switching the selected slot always shows *its* data —
+            # a fixed key would keep Streamlit's last-remembered value across slots and
+            # ignore the fresh `index=` below, letting a stale field silently overwrite
+            # the wrong value into the newly-selected slot on Update.
             col1, col2, col3, col4 = st.columns(4)
-            new_floor = col1.selectbox("Floor", ["G", "1", "2"], index=["G", "1", "2"].index(sel_slot["floor"]), key="edit_floor")
-            new_type = col2.selectbox("Vehicle Type", ["4-wheeler", "2-wheeler"], index=0 if sel_slot["type"] == "4-wheeler" else 1, key="edit_type")
-            new_status = col3.selectbox("Status", ["vacant", "occupied"], index=0 if sel_slot["status"] == "vacant" else 1, key="edit_status")
+            new_floor = col1.selectbox("Floor", ["G", "1", "2"], index=["G", "1", "2"].index(sel_slot["floor"]), key=f"edit_floor_{sel_slot['id']}")
+            new_type = col2.selectbox("Vehicle Type", ["4-wheeler", "2-wheeler"], index=0 if sel_slot["type"] == "4-wheeler" else 1, key=f"edit_type_{sel_slot['id']}")
+            new_status = col3.selectbox("Status", ["vacant", "occupied"], index=0 if sel_slot["status"] == "vacant" else 1, key=f"edit_status_{sel_slot['id']}")
 
             col_save, col_del = st.columns(2)
             if col_save.button("💾 Update", use_container_width=True):
@@ -443,10 +459,10 @@ def _bookings_page():
         df = pd.DataFrame(bookings)
         show_cols = [c for c in ["id","booking_ref","user_name","vehicle_no","slot_code","from_date","from_time","to_time","amount","status"] if c in df.columns]
         st.dataframe(df[show_cols], use_container_width=True, hide_index=True)
-        active = [b for b in bookings if b["status"] == "active"]
+        active = [b for b in bookings if b["status"] in ("active", "overstay")]
         if active:
-            opts = {f"{b['booking_ref']} - {b['vehicle_no']} - {b['slot_code']}": b for b in active}
-            selected = st.selectbox("Select active booking", list(opts.keys()))
+            opts = {f"{b['booking_ref']} - {b['vehicle_no']} - {b['slot_code']} ({b['status']})": b for b in active}
+            selected = st.selectbox("Select active/overstay booking", list(opts.keys()))
             c1, c2 = st.columns(2)
             if c1.button("Cancel Booking", use_container_width=True):
                 cancel_booking(opts[selected]["id"]); st.success("Booking cancelled."); st.rerun()
