@@ -7,10 +7,27 @@ import sqlite3
 import hashlib
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "parksync.db")
+
+# This app's bookings, rates, and schedules are all entered and displayed in
+# IST (Asia/Kolkata, UTC+5:30 — no DST, so a fixed offset is exact, not an
+# approximation). A fixed offset avoids depending on the OS's tz database or
+# adding pytz/zoneinfo as a dependency.
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def now_ist() -> datetime:
+    """Current time in IST, returned naive (tzinfo stripped) so it compares
+    directly against the naive datetimes parsed from from_date/from_time.
+    Use this instead of the bare datetime.now() for anything compared against
+    a booking's schedule — datetime.now() reads the server's OS clock, which
+    is IST only by local coincidence and is UTC on Streamlit Community Cloud,
+    silently shifting every "time remaining" / overstay calculation by 5.5
+    hours once deployed there."""
+    return datetime.now(IST).replace(tzinfo=None)
 
 
 def get_conn():
@@ -140,7 +157,7 @@ def hash_password(pw: str) -> str:
 
 def generate_unique_booking_ref():
     """Generate a truly unique booking reference using UUID + timestamp."""
-    timestamp = datetime.now().strftime("%Y%m%d")
+    timestamp = now_ist().strftime("%Y%m%d")
     unique_id = str(uuid.uuid4())[:8].upper()
     return f"BK{timestamp}{unique_id}"
 
@@ -511,7 +528,7 @@ def get_payment(payment_id: str):
 def update_payment_status(payment_id: str, status: str, transaction_ref: str = None):
     """Update payment status."""
     conn = get_conn()
-    completed_at = datetime.now().isoformat() if status == "completed" else None
+    completed_at = now_ist().isoformat() if status == "completed" else None
     conn.execute(
         "UPDATE payments SET status=?, transaction_ref=?, completed_at=? WHERE payment_id=?",
         (status, transaction_ref, completed_at, payment_id),
@@ -619,12 +636,12 @@ def log_entry(booking_id: int, gate: str = "Main"):
     if not row:
         conn.execute(
             "INSERT INTO entry_exit_logs (booking_id, entry_time, gate) VALUES (?,?,?)",
-            (booking_id, datetime.now().isoformat(), gate),
+            (booking_id, now_ist().isoformat(), gate),
         )
     else:
         conn.execute(
             "UPDATE entry_exit_logs SET entry_time=? WHERE booking_id=?",
-            (datetime.now().isoformat(), booking_id),
+            (now_ist().isoformat(), booking_id),
         )
     conn.commit()
     conn.close()
@@ -635,7 +652,7 @@ def log_exit(booking_id: int):
     conn = get_conn()
     conn.execute(
         "UPDATE entry_exit_logs SET exit_time=? WHERE booking_id=?",
-        (datetime.now().isoformat(), booking_id),
+        (now_ist().isoformat(), booking_id),
     )
     conn.commit()
     conn.close()
@@ -748,7 +765,7 @@ def refresh_overstay_alerts():
         FROM bookings b JOIN parking_slots p ON b.slot_id = p.id
         WHERE b.status IN ('active', 'overstay')
     """).fetchall()
-    now = datetime.now()
+    now = now_ist()
     for row in rows:
         boundary = get_overstay_boundary(row)
         if boundary is None:
@@ -844,7 +861,7 @@ def resolve_overstay_alert(alert_id: int):
     if alert:
         conn.execute(
             "UPDATE bookings SET status='active', overstay_paid_until=? WHERE id=?",
-            (datetime.now().isoformat(sep=" "), alert["booking_id"]),
+            (now_ist().isoformat(sep=" "), alert["booking_id"]),
         )
     conn.commit()
     conn.close()
@@ -888,7 +905,7 @@ def get_analytics():
     t_books = conn.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]
     active  = conn.execute("SELECT COUNT(*) FROM bookings WHERE status IN ('active', 'overstay')").fetchone()[0]
     revenue = conn.execute("SELECT COALESCE(SUM(amount),0) FROM bookings WHERE status!='cancelled'").fetchone()[0]
-    today   = datetime.now().strftime("%Y-%m-%d")
+    today   = now_ist().strftime("%Y-%m-%d")
     today_r = conn.execute(
         "SELECT COALESCE(SUM(amount),0) FROM bookings WHERE from_date=? AND status!='cancelled'",
         (today,),

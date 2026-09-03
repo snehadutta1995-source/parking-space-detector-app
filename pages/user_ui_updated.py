@@ -23,6 +23,7 @@ from utils.database import (
     send_notification, mark_notification_read,
     complete_booking, get_overstay_boundary,
     refresh_overstay_alerts, get_overstay_alert_for_booking,
+    now_ist,
 )
 from utils.styles import apply_theme, badge_html, rate_card_html, animated_slot_card_html, TIME_SLOTS, section_header_html, card_html
 
@@ -453,8 +454,8 @@ def _pre_book():
             with st.container():
                 vehicle_no = st.text_input("Vehicle Number", placeholder="MH12AB1234").upper()
                 vtype      = st.selectbox("Vehicle Type", ["4-wheeler", "2-wheeler"])
-                booking_date = st.date_input("Booking Date", value=datetime.now().date(), 
-                                           min_value=datetime.now().date())
+                booking_date = st.date_input("Booking Date", value=now_ist().date(),
+                                           min_value=now_ist().date())
                 from_t   = st.time_input("From Time", value=time(9, 0))
                 duration = st.selectbox("Duration", [1, 2, 3, 4, 6, 8], index=1,
                                        format_func=lambda h: f"{h} hour{'s' if h>1 else ''}")
@@ -546,7 +547,7 @@ def _pre_book():
 
         with st.form("waitlist_form"):
             w_vtype = st.selectbox("Vehicle Type", ["4-wheeler", "2-wheeler"], key="wait_type")
-            w_date = st.date_input("Preferred Date", value=datetime.now().date(), key="wait_date")
+            w_date = st.date_input("Preferred Date", value=now_ist().date(), key="wait_date")
             w_duration = st.selectbox("Duration", [1, 2, 3, 4, 6, 8], index=1, key="wait_dur")
             
             if st.form_submit_button("📝 Join Waitlist"):
@@ -803,6 +804,45 @@ def _fmt_minutes(total_minutes: int) -> str:
     return f"{hrs}h {mins:02d}m" if hrs else f"{mins}m"
 
 
+def _render_countdown_timer(seconds_remaining: int, unique_key: str):
+    """A live, client-side-ticking countdown seeded from seconds_remaining at
+    render time. A plain st.caption only updates on the next Streamlit rerun
+    (a click, a widget change) and sits stale in between — this keeps counting
+    down every second on its own without needing the page to rerun."""
+    seconds_remaining = max(int(seconds_remaining), 0)
+    components.html(f"""
+    <div id="cd-{unique_key}" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+         font-size:13px;color:#9ca3af;padding:2px 0 6px;">Time remaining: --</div>
+    <script>
+    (function() {{
+        var remaining = {seconds_remaining};
+        var el = document.getElementById('cd-{unique_key}');
+        function fmt(s) {{
+            s = Math.max(s, 0);
+            var h = Math.floor(s / 3600);
+            var m = Math.floor((s % 3600) / 60);
+            var sec = s % 60;
+            var parts = [];
+            if (h > 0) parts.push(h + 'h');
+            parts.push(String(m).padStart(2, '0') + 'm');
+            parts.push(String(sec).padStart(2, '0') + 's');
+            return parts.join(' ');
+        }}
+        function tick() {{
+            if (remaining <= 0) {{
+                el.textContent = 'Booking time ended';
+                return;
+            }}
+            el.textContent = 'Time remaining: ' + fmt(remaining);
+            remaining -= 1;
+        }}
+        tick();
+        setInterval(tick, 1000);
+    }})();
+    </script>
+    """, height=26)
+
+
 def _render_checkout_controls(b):
     """Early-checkout / overstay controls for one active booking card.
 
@@ -849,9 +889,10 @@ def _render_checkout_controls(b):
     if boundary is None:
         return
 
-    now = datetime.now()
+    now = now_ist()
     remaining_min = int((boundary - now).total_seconds() // 60)
-    st.caption(f"Booked until {boundary.strftime('%H:%M')} · {_fmt_minutes(remaining_min)} remaining")
+    st.caption(f"Booked until {boundary.strftime('%H:%M')}")
+    _render_countdown_timer(int((boundary - now).total_seconds()), f"active_{b['id']}")
     if st.button("🚪 Checkout Early", key=f"checkout_early_{b['id']}", use_container_width=True):
         complete_booking(b["id"])
         st.warning(

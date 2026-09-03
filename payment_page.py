@@ -14,7 +14,8 @@ from pathlib import Path
 
 from utils.database import (
     get_booking_by_ref, activate_booking, extend_booking,
-    create_payment, update_payment_status, send_notification, get_user
+    create_payment, update_payment_status, send_notification, get_user,
+    now_ist,
 )
 from utils.email_service import send_payment_otp_email
 from utils.styles import apply_theme
@@ -504,7 +505,7 @@ def _process_card_payment(booking, cardholder, card_last4, card_type, amount_due
             payment_method,
         )
 
-        transaction_ref = f"TXN{datetime.now().strftime('%Y%m%d%H%M%S')}{booking['id']}"
+        transaction_ref = f"TXN{now_ist().strftime('%Y%m%d%H%M%S')}{booking['id']}"
         update_payment_status(payment_id, "completed", transaction_ref)
 
         if extension:
